@@ -1,0 +1,29 @@
+From 929e75081c4146b0048eacb0c79d6a987b83c8d0 Mon Sep 17 00:00:00 2001
+From: Scott Ellis <scott@jumpnowtek.com>
+Date: Mon, 16 Apr 2018 10:43:46 -0400
+Subject: [PATCH 2/3] mwifiex: Skip unsupported CHAN_REGION_CFG cmd
+
+Eliminates this warning
+
+  mwifiex_sdio mmc1:0001:1: CMD_RESP: cmd 0x242 error, result=0x2
+---
+ drivers/net/wireless/marvell/mwifiex/sta_cmd.c | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/drivers/net/wireless/marvell/mwifiex/sta_cmd.c b/drivers/net/wireless/marvell/mwifiex/sta_cmd.c
+index 211e47d..c389727 100644
+--- a/drivers/net/wireless/marvell/mwifiex/sta_cmd.c
++++ b/drivers/net/wireless/marvell/mwifiex/sta_cmd.c
+@@ -2339,9 +2339,6 @@ int mwifiex_sta_init_cmd(struct mwifiex_private *priv, u8 first_sta, bool init)
+ 			if (ret)
+ 				return -1;
+ 		}
+-
+-		mwifiex_send_cmd(priv, HostCmd_CMD_CHAN_REGION_CFG,
+-				 HostCmd_ACT_GEN_GET, 0, NULL, true);
+ 	}
+ 
+ 	/* get tx rate */
+-- 
+2.7.4
+

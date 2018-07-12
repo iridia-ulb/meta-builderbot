@@ -1,0 +1,141 @@
+From 0db0b396c16fa77e0037d4ae6688d3be5c6a54a5 Mon Sep 17 00:00:00 2001
+From: Michael Allwright <allsey87@gmail.com>
+Date: Mon, 11 Jun 2018 17:17:14 +0200
+Subject: [PATCH 2/2] Add the rate class
+
+---
+ src/core/CMakeLists.txt   |  4 +++-
+ src/core/utility/rate.cpp | 52 +++++++++++++++++++++++++++++++++++++++++++++++
+ src/core/utility/rate.h   | 39 +++++++++++++++++++++++++++++++++++
+ 3 files changed, 94 insertions(+), 1 deletion(-)
+ create mode 100644 src/core/utility/rate.cpp
+ create mode 100644 src/core/utility/rate.h
+
+diff --git a/src/core/CMakeLists.txt b/src/core/CMakeLists.txt
+index abbbe13..2457358 100644
+--- a/src/core/CMakeLists.txt
++++ b/src/core/CMakeLists.txt
+@@ -4,7 +4,8 @@
+ # argos3/core/utility
+ set(ARGOS3_HEADERS_UTILITY
+   utility/signal_processing.h
+-  utility/string_utilities.h)
++  utility/string_utilities.h
++  utility/rate.h)
+ # argos3/core/utility/configuration
+ set(ARGOS3_HEADERS_UTILITY_CONFIGURATION
+   utility/configuration/argos_configuration.h
+@@ -125,6 +126,7 @@ set(ARGOS3_SOURCES_CORE
+   ${ARGOS3_HEADERS_UTILITY}
+   utility/signal_processing.cpp
+   utility/string_utilities.cpp
++  utility/rate.cpp
+   ${ARGOS3_HEADERS_UTILITY_CONFIGURATION}
+   utility/configuration/command_line_arg_parser.cpp
+   ${ARGOS3_HEADERS_UTILITY_CONFIGURATION_TINYXML}
+diff --git a/src/core/utility/rate.cpp b/src/core/utility/rate.cpp
+new file mode 100644
+index 0000000..dd1dada
+--- /dev/null
++++ b/src/core/utility/rate.cpp
+@@ -0,0 +1,52 @@
++#include "rate.h"
++#include <argos3/core/utility/logging/argos_log.h>
++
++using namespace argos;
++
++/****************************************/
++/****************************************/
++
++CRate::CRate(Real f_rate) {
++   SetRate(f_rate);
++   ::gettimeofday(&m_tPast, NULL);
++}
++
++/****************************************/
++/****************************************/
++
++void CRate::Sleep() {
++   /* Get current time */
++   ::gettimeofday(&m_tNow, NULL);
++   /* Calculate difference between past call and now */
++   timersub(&m_tNow, &m_tPast, &m_tDiff);
++   UInt64 unMicroSecDiff =
++      m_tDiff.tv_sec * 1000000 +
++      m_tDiff.tv_usec;
++   /* Sleep if necessary */
++   if(unMicroSecDiff < m_unNominalPeriod) {
++      m_tSleepPeriod.tv_sec = (m_unNominalPeriod - unMicroSecDiff) / 1e6;
++      m_tSleepPeriod.tv_nsec = (m_unNominalPeriod - unMicroSecDiff) * 1000;
++      ::nanosleep(&m_tSleepPeriod, NULL);
++   }
++   else {
++      LOGERR << "[WARNING] Nominal rate "
++             << m_fNominalRate
++             << " loops per sec delayed by "
++             << (unMicroSecDiff - m_unNominalPeriod)
++             << " microseconds"
++             << std::endl;
++   }
++   /* Update past for next call */
++   ::gettimeofday(&m_tPast, NULL);
++}
++
++/****************************************/
++/****************************************/
++
++void CRate::SetRate(Real f_rate) {
++   m_fNominalRate = Abs(f_rate);
++   m_unNominalPeriod = 1e6 / m_fNominalRate;
++}
++
++/****************************************/
++/****************************************/
+diff --git a/src/core/utility/rate.h b/src/core/utility/rate.h
+new file mode 100644
+index 0000000..6d70ec3
+--- /dev/null
++++ b/src/core/utility/rate.h
+@@ -0,0 +1,39 @@
++#ifndef RATE_H
++#define RATE_H
++
++#include <time.h>
++#include <sys/time.h>
++#include <argos3/core/utility/math/general.h>
++
++namespace argos {
++
++   class CRate {
++      
++   public:
++
++      CRate(Real f_rate);
++      
++      ~CRate() {}
++
++      void Sleep();
++      
++      inline Real GetRate() const {
++         return m_fNominalRate;
++      }
++      
++      void SetRate(Real f_rate);
++
++   private:
++
++      Real m_fNominalRate;
++      UInt64 m_unNominalPeriod;
++      ::timespec m_tSleepPeriod;
++      ::timeval m_tPast;
++      ::timeval m_tNow;
++      ::timeval m_tDiff;
++      
++   };
++   
++}
++
++#endif // RATE_H
+-- 
+2.11.0
+

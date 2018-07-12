@@ -1,0 +1,33 @@
+From 3b90923cd0e1d4a4cf454bb584d495b4590d3115 Mon Sep 17 00:00:00 2001
+From: Michael Allwright <allsey87@gmail.com>
+Date: Fri, 11 May 2018 11:18:32 +0200
+Subject: [PATCH] Use BuilderBot device-tree
+
+---
+ include/configs/ti_omap4_common.h | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/include/configs/ti_omap4_common.h b/include/configs/ti_omap4_common.h
+index 018e4c2512..9b0b938115 100644
+--- a/include/configs/ti_omap4_common.h
++++ b/include/configs/ti_omap4_common.h
+@@ -107,6 +107,7 @@
+ 	DEFAULT_MMC_TI_ARGS \
+ 	DEFAULT_FIT_TI_ARGS \
+ 	"console=ttyO2,115200n8\0" \
++	"bootargs=console=${console} rootfstype=ext4 rootwait\0" \
+ 	"fdtfile=undefined\0" \
+ 	"bootpart=0:2\0" \
+ 	"bootdir=/boot\0" \
+@@ -127,7 +128,7 @@
+ 		"if test $board_name = panda-es; then " \
+ 			"setenv fdtfile omap4-panda-es.dtb; fi;" \
+ 		"if test $board_name = duovero; then " \
+-			"setenv fdtfile omap4-duovero-parlor.dtb; fi;" \
++			"setenv fdtfile omap4-duovero-builderbot.dtb; fi;" \
+ 		"if test $fdtfile = undefined; then " \
+ 			"echo WARNING: Could not determine device tree to use; fi; \0" \
+ 	BOOTENV
+-- 
+2.11.0
+

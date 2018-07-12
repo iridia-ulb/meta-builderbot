@@ -1,0 +1,129 @@
+From 6b8277045f6ed3b8d17a5af6ca351432eec9be22 Mon Sep 17 00:00:00 2001
+From: Michael Allwright <allsey87@gmail.com>
+Date: Tue, 10 Jul 2018 16:19:57 +0200
+Subject: [PATCH] serdev: Add support for multi-UART devices
+
+---
+ drivers/tty/serdev/core.c           | 39 +++++++++++++++++++++++--------------
+ drivers/tty/serdev/serdev-ttyport.c | 12 ++----------
+ include/linux/serdev.h              |  8 ++++++++
+ 3 files changed, 34 insertions(+), 25 deletions(-)
+
+diff --git a/drivers/tty/serdev/core.c b/drivers/tty/serdev/core.c
+index f439c72..8d00628 100644
+--- a/drivers/tty/serdev/core.c
++++ b/drivers/tty/serdev/core.c
+@@ -428,30 +428,39 @@ EXPORT_SYMBOL_GPL(serdev_controller_alloc);
+ 
+ static int of_serdev_register_devices(struct serdev_controller *ctrl)
+ {
+-	struct device_node *node;
++	struct device_node *port, *node;
+ 	struct serdev_device *serdev = NULL;
++	struct serport *serport = serdev_controller_get_drvdata(ctrl);
+ 	int err;
++	unsigned reg;
+ 	bool found = false;
+ 
+-	for_each_available_child_of_node(ctrl->dev.of_node, node) {
+-		if (!of_get_property(node, "compatible", NULL))
++	for_each_available_child_of_node(ctrl->dev.of_node, port) {
++		of_property_read_u32(port, "reg", &reg);
++
++		if (serport->tty_idx != reg)
+ 			continue;
+ 
+-		dev_dbg(&ctrl->dev, "adding child %pOF\n", node);
++		for_each_available_child_of_node(port, node) {
++			if (!of_get_property(node, "compatible", NULL))
++				continue;
+ 
+-		serdev = serdev_device_alloc(ctrl);
+-		if (!serdev)
+-			continue;
++			dev_dbg(&ctrl->dev, "adding child %pOF\n", node);
++
++			serdev = serdev_device_alloc(ctrl);
++			if (!serdev)
++				continue;
+ 
+-		serdev->dev.of_node = node;
++			serdev->dev.of_node = node;
+ 
+-		err = serdev_device_add(serdev);
+-		if (err) {
+-			dev_err(&serdev->dev,
+-				"failure adding device. status %d\n", err);
+-			serdev_device_put(serdev);
+-		} else
+-			found = true;
++			err = serdev_device_add(serdev);
++			if (err) {
++				dev_err(&serdev->dev,
++					"failure adding device. status %d\n", err);
++				serdev_device_put(serdev);
++			} else
++				found = true;
++		}
+ 	}
+ 	if (!found)
+ 		return -ENODEV;
+diff --git a/drivers/tty/serdev/serdev-ttyport.c b/drivers/tty/serdev/serdev-ttyport.c
+index fa16729..15303dc 100644
+--- a/drivers/tty/serdev/serdev-ttyport.c
++++ b/drivers/tty/serdev/serdev-ttyport.c
+@@ -10,14 +10,6 @@
+ 
+ #define SERPORT_ACTIVE		1
+ 
+-struct serport {
+-	struct tty_port *port;
+-	struct tty_struct *tty;
+-	struct tty_driver *tty_drv;
+-	int tty_idx;
+-	unsigned long flags;
+-};
+-
+ /*
+  * Callback functions from the tty port.
+  */
+@@ -125,7 +117,7 @@ static int ttyport_open(struct serdev_controller *ctrl)
+ 
+ 	tty_unlock(serport->tty);
+ 
+-	/* Bring the UART into a known 8 bits no parity hw fc state */
++	/* Bring the UART into a known 8 bits no parity sw fc state */
+ 	ktermios = tty->termios;
+ 	ktermios.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP |
+ 			      INLCR | IGNCR | ICRNL | IXON);
+@@ -133,7 +125,7 @@ static int ttyport_open(struct serdev_controller *ctrl)
+ 	ktermios.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
+ 	ktermios.c_cflag &= ~(CSIZE | PARENB);
+ 	ktermios.c_cflag |= CS8;
+-	ktermios.c_cflag |= CRTSCTS;
++	ktermios.c_cflag &= ~CRTSCTS;
+ 	/* Hangups are not supported so make sure to ignore carrier detect. */
+ 	ktermios.c_cflag |= CLOCAL;
+ 	tty_set_termios(tty, &ktermios);
+diff --git a/include/linux/serdev.h b/include/linux/serdev.h
+index f153b2c..9b9bd38 100644
+--- a/include/linux/serdev.h
++++ b/include/linux/serdev.h
+@@ -25,6 +25,14 @@ struct serdev_device;
+  * serdev device structures
+  */
+ 
++struct serport {
++	struct tty_port *port;
++	struct tty_struct *tty;
++	struct tty_driver *tty_drv;
++	int tty_idx;
++	unsigned long flags;
++};
++
+ /**
+  * struct serdev_device_ops - Callback operations for a serdev device
+  * @receive_buf:	Function called with data received from device;
+-- 
+2.7.4
+

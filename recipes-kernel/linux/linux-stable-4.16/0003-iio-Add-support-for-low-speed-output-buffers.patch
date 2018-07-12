@@ -1,0 +1,214 @@
+From 06a7a4b95c99a9aa0825f1605fee0c179f7b337e Mon Sep 17 00:00:00 2001
+From: Michael Allwright <allsey87@gmail.com>
+Date: Thu, 5 Jul 2018 17:00:33 +0200
+Subject: [PATCH 1/1] iio: Add support for low-speed output buffers
+
+---
+ drivers/iio/buffer/kfifo_buf.c    | 50 +++++++++++++++++++++++++++++++++++++++
+ drivers/iio/iio_core.h            |  3 +++
+ drivers/iio/industrialio-buffer.c | 46 +++++++++++++++++++++++++++++++++++
+ drivers/iio/industrialio-core.c   |  1 +
+ include/linux/iio/buffer.h        |  2 ++
+ include/linux/iio/buffer_impl.h   |  4 ++++
+ 6 files changed, 106 insertions(+)
+
+diff --git a/drivers/iio/buffer/kfifo_buf.c b/drivers/iio/buffer/kfifo_buf.c
+index 047fe757ab97..8e8fe7033153 100644
+--- a/drivers/iio/buffer/kfifo_buf.c
++++ b/drivers/iio/buffer/kfifo_buf.c
+@@ -90,6 +90,23 @@ static int iio_store_to_kfifo(struct iio_buffer *r,
+ 	return 0;
+ }
+ 
++static int iio_remove_from_kfifo(struct iio_buffer *r, void *data)
++{
++	int ret;
++	struct iio_kfifo *kf = iio_to_kfifo(r);
++
++	if (kfifo_len(&kf->kf) < 1)
++		return -EBUSY;
++
++	ret = kfifo_out(&kf->kf, data, 1);
++	if (ret != 1)
++		return -EBUSY;
++
++	wake_up_interruptible_poll(&r->pollq, POLLOUT | POLLWRNORM);
++
++	return 0;
++}
++
+ static int iio_read_first_n_kfifo(struct iio_buffer *r,
+ 			   size_t n, char __user *buf)
+ {
+@@ -131,10 +148,43 @@ static void iio_kfifo_buffer_release(struct iio_buffer *buffer)
+ 	kfree(kf);
+ }
+ 
++static bool iio_kfifo_buf_space_available(struct iio_buffer *r)
++{
++	struct iio_kfifo *kf = iio_to_kfifo(r);
++	bool full;
++
++	mutex_lock(&kf->user_lock);
++	full = kfifo_is_full(&kf->kf);
++	mutex_unlock(&kf->user_lock);
++
++	return !full;
++}
++
++static int iio_kfifo_write(struct iio_buffer *r, size_t n,
++	const char __user *buf)
++{
++	struct iio_kfifo *kf = iio_to_kfifo(r);
++	int ret, copied;
++
++	mutex_lock(&kf->user_lock);
++	if (!kfifo_initialized(&kf->kf) || n < kfifo_esize(&kf->kf))
++		ret = -EINVAL;
++	else
++		ret = kfifo_from_user(&kf->kf, buf, n, &copied);
++	mutex_unlock(&kf->user_lock);
++	if (ret)
++		return ret;
++
++	return copied;
++}
++
+ static const struct iio_buffer_access_funcs kfifo_access_funcs = {
+ 	.store_to = &iio_store_to_kfifo,
++	.remove_from = &iio_remove_from_kfifo,
+ 	.read_first_n = &iio_read_first_n_kfifo,
+ 	.data_available = iio_kfifo_buf_data_available,
++	.space_available = iio_kfifo_buf_space_available,
++	.write = iio_kfifo_write,
+ 	.request_update = &iio_request_update_kfifo,
+ 	.set_bytes_per_datum = &iio_set_bytes_per_datum_kfifo,
+ 	.set_length = &iio_set_length_kfifo,
+diff --git a/drivers/iio/iio_core.h b/drivers/iio/iio_core.h
+index c775fedbcaf6..e84b05acc91d 100644
+--- a/drivers/iio/iio_core.h
++++ b/drivers/iio/iio_core.h
+@@ -47,6 +47,8 @@ __poll_t iio_buffer_poll(struct file *filp,
+ 			     struct poll_table_struct *wait);
+ ssize_t iio_buffer_read_first_n_outer(struct file *filp, char __user *buf,
+ 				      size_t n, loff_t *f_ps);
++ssize_t iio_buffer_chrdev_write(struct file *filp, const char __user *buf,
++				      size_t n, loff_t *f_ps);
+ 
+ int iio_buffer_alloc_sysfs_and_mask(struct iio_dev *indio_dev);
+ void iio_buffer_free_sysfs_and_mask(struct iio_dev *indio_dev);
+@@ -61,6 +63,7 @@ void iio_buffer_wakeup_poll(struct iio_dev *indio_dev);
+ 
+ #define iio_buffer_poll_addr NULL
+ #define iio_buffer_read_first_n_outer_addr NULL
++#define iio_buffer_chrdev_write NULL
+ 
+ static inline int iio_buffer_alloc_sysfs_and_mask(struct iio_dev *indio_dev)
+ {
+diff --git a/drivers/iio/industrialio-buffer.c b/drivers/iio/industrialio-buffer.c
+index cd5bfe39591b..a028c753cb2b 100644
+--- a/drivers/iio/industrialio-buffer.c
++++ b/drivers/iio/industrialio-buffer.c
+@@ -90,6 +90,12 @@ static bool iio_buffer_ready(struct iio_dev *indio_dev, struct iio_buffer *buf,
+ 	return false;
+ }
+ 
++int iio_buffer_remove_sample(struct iio_buffer *buffer, void *data)
++{
++	return buffer->access->remove_from(buffer, data);
++}
++EXPORT_SYMBOL_GPL(iio_buffer_remove_sample);
++
+ /**
+  * iio_buffer_read_first_n_outer() - chrdev read for buffer access
+  * @filp:	File structure pointer for the char device
+@@ -160,6 +166,46 @@ ssize_t iio_buffer_read_first_n_outer(struct file *filp, char __user *buf,
+ 	return ret;
+ }
+ 
++static bool iio_buffer_space_available(struct iio_buffer *buf)
++{
++	if (buf->access->space_available)
++		return buf->access->space_available(buf);
++
++	return true;
++}
++
++ssize_t iio_buffer_chrdev_write(struct file *filp, const char __user *buf,
++				      size_t n, loff_t *f_ps)
++{
++	struct iio_dev *indio_dev = filp->private_data;
++	struct iio_buffer *rb = indio_dev->buffer;
++	int ret;
++
++	if (!rb || !rb->access->write)
++		return -EINVAL;
++
++	do {
++		if (!iio_buffer_space_available(rb)) {
++			if (filp->f_flags & O_NONBLOCK)
++				return -EAGAIN;
++
++			ret = wait_event_interruptible(rb->pollq,
++					iio_buffer_space_available(rb) ||
++					indio_dev->info == NULL);
++			if (ret)
++				return ret;
++			if (indio_dev->info == NULL)
++				return -ENODEV;
++		}
++
++		ret = rb->access->write(rb, n, buf);
++		if (ret == 0 && (filp->f_flags & O_NONBLOCK))
++			ret = -EAGAIN;
++	} while (ret == 0);
++
++	return ret;
++}
++
+ /**
+  * iio_buffer_poll() - poll the buffer to find out if it has data
+  * @filp:	File structure pointer for device access
+diff --git a/drivers/iio/industrialio-core.c b/drivers/iio/industrialio-core.c
+index 19bdf3d2962a..f9922bf214d6 100644
+--- a/drivers/iio/industrialio-core.c
++++ b/drivers/iio/industrialio-core.c
+@@ -1629,6 +1629,7 @@ static long iio_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+ 
+ static const struct file_operations iio_buffer_fileops = {
+ 	.read = iio_buffer_read_first_n_outer_addr,
++	.write = iio_buffer_chrdev_write,
+ 	.release = iio_chrdev_release,
+ 	.open = iio_chrdev_open,
+ 	.poll = iio_buffer_poll_addr,
+diff --git a/include/linux/iio/buffer.h b/include/linux/iio/buffer.h
+index 48767c776119..d74e75fb23a4 100644
+--- a/include/linux/iio/buffer.h
++++ b/include/linux/iio/buffer.h
+@@ -44,6 +44,8 @@ static inline int iio_push_to_buffers_with_timestamp(struct iio_dev *indio_dev,
+ 	return iio_push_to_buffers(indio_dev, data);
+ }
+ 
++int iio_buffer_remove_sample(struct iio_buffer *buffer, void *data);
++
+ bool iio_validate_scan_mask_onehot(struct iio_dev *indio_dev,
+ 				   const unsigned long *mask);
+ 
+diff --git a/include/linux/iio/buffer_impl.h b/include/linux/iio/buffer_impl.h
+index b9e22b7e2f28..33835fdb7e48 100644
+--- a/include/linux/iio/buffer_impl.h
++++ b/include/linux/iio/buffer_impl.h
+@@ -50,6 +50,10 @@ struct iio_buffer_access_funcs {
+ 			    char __user *buf);
+ 	size_t (*data_available)(struct iio_buffer *buffer);
+ 
++	int (*remove_from)(struct iio_buffer *buffer, void *data);
++	int (*write)(struct iio_buffer *r, size_t n, const char __user *buf);
++	bool (*space_available)(struct iio_buffer *r);
++
+ 	int (*request_update)(struct iio_buffer *buffer);
+ 
+ 	int (*set_bytes_per_datum)(struct iio_buffer *buffer, size_t bpd);
+-- 
+2.11.0
+

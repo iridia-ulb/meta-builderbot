@@ -1,0 +1,14 @@
+ctrl_interface=/var/run/wpa_supplicant
+ap_scan=1
+
+network={
+    key_mgmt=WPA-PSK
+    ssid="devnet"
+    psk="amadeus0247"
+}
+
+# open network
+#network={
+#    key_mgmt=NONE
+#    ssid="<ssid>"
+#}

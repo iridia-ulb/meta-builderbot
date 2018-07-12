@@ -1,0 +1,36 @@
+# Local configuration for meta-builderbot images
+# Yocto Project 2.4 Poky distribution [rocko] branch
+# This is a sysvinit system
+
+LICENSE_FLAGS_WHITELIST = "commercial"
+
+DISTRO_FEATURES = "ext2 usbhost ${DISTRO_FEATURES_LIBC}"
+
+PREFERRED_PROVIDER_jpeg = "libjpeg-turbo"
+
+PREFERRED_PROVIDER_udev = "eudev"
+
+MACHINE = "builderbot"
+
+KERNEL_DEVICETREE = "omap4-duovero-builderbot.dtb"
+
+DISTRO = "poky"
+
+PACKAGE_CLASSES = "package_ipk"
+
+# i686 or x86_64
+SDKMACHINE = "x86_64"
+
+# enable password-less login as root
+EXTRA_IMAGE_FEATURES = "debug-tweaks"
+
+USER_CLASSES = "image-mklibs image-prelink"
+
+PATCHRESOLVE = "noop"
+
+RM_OLD_IMAGE = "1"
+
+#INHERIT += "rm_work"
+
+CONF_VERSION = "1"
+

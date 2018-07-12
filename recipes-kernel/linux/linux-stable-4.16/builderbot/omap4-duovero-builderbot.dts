@@ -1,0 +1,297 @@
+/*
+ * Copyright (C) 2014 Florian Vaussard, EPFL Mobots group
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ */
+/dts-v1/;
+
+#include "omap4-duovero.dtsi"
+
+#include <dt-bindings/input/input.h>
+
+/ {
+	model = "OMAP4430 Gumstix Duovero on the BuilderBot";
+	compatible = "ulb,omap4-duovero-builderbot", "gumstix,omap4-duovero", "ti,omap4430", "ti,omap4";
+
+	uart56_osc: uart56_osc {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <1843200>;
+	};
+
+	uart78_osc: uart78_osc {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <1843200>;
+	};
+
+	uart56_clk: uart56_clk {
+		compatible = "gpio-gate-clock";
+		clocks = <&uart56_osc>;
+		#clock-cells = <0>;
+		enable-gpios = <&gpio3 17 GPIO_ACTIVE_HIGH>; /* cam_shutter.gpio_81: uart56_clk_en */
+	};
+
+	uart78_clk: uart78_clk {
+		compatible = "gpio-gate-clock";
+		clocks = <&uart78_osc>;
+		#clock-cells = <0>;
+		enable-gpios = <&gpio3 18 GPIO_ACTIVE_HIGH>; /* cam_strobe.gpio_82: uart78_clk_en */
+	};
+
+	regulator_vdd18_mmc3: regulator_vdd18_mmc3 {
+		compatible = "regulator-fixed";
+		regulator-name = "vdd18-mmc3";
+		regulator-min-microvolt = <3000000>;
+		regulator-max-microvolt = <3000000>;
+		regulator-always-on;
+	};
+};
+
+&omap4_pmx_core {
+	pinctrl-0 = <
+			&uart56ctrl_pins
+			&uart78ctrl_pins
+	>;
+
+	i2c2_pins: pinmux_i2c2_pins {
+		pinctrl-single,pins = <
+			OMAP4_IOPAD(0x126, PIN_INPUT_PULLUP | MUX_MODE0)	/* i2c2_scl */
+			OMAP4_IOPAD(0x128, PIN_INPUT_PULLUP | MUX_MODE0)	/* i2c2_sda */
+		>;
+	};
+
+	i2c3_pins: pinmux_i2c3_pins {
+		pinctrl-single,pins = <
+			OMAP4_IOPAD(0x12a, PIN_INPUT_PULLUP | MUX_MODE0)	/* i2c3_scl */
+			OMAP4_IOPAD(0x12c, PIN_INPUT_PULLUP | MUX_MODE0)	/* i2c3_sda */
+		>;
+	};
+
+	uart56ctrl_pins: pinmux_uart56ctrl_pins {
+		pinctrl-single,pins = <
+			OMAP4_IOPAD(0x068, PIN_INPUT_PULLUP | MUX_MODE3)	/* gpmc_a20.gpio_44: uart56_irq */
+			OMAP4_IOPAD(0x06a, PIN_INPUT_PULLUP | MUX_MODE3)	/* gpmc_a21.gpio_45: uart56_nrst */
+			OMAP4_IOPAD(0x0bc, PIN_OUTPUT | MUX_MODE3)		/* cam_shutter.gpio_81: uart56_clk_en */
+		>;
+	};
+
+	uart78ctrl_pins: pinmux_uart78ctrl_pins {
+		pinctrl-single,pins = <
+			OMAP4_IOPAD(0x070, PIN_INPUT_PULLUP | MUX_MODE3)	/* gpmc_a24.gpio_48: uart78_irq */
+			OMAP4_IOPAD(0x06c, PIN_INPUT_PULLUP | MUX_MODE3)	/* gpmc_a24.gpio_46: uart78_nrst */
+			OMAP4_IOPAD(0x0be, PIN_OUTPUT | MUX_MODE3)		/* cam_strobe.gpio_82: uart78_clk_en */
+		>;
+	};
+
+	mmc3_pins: pinmux_mmc3_pins {
+		pinctrl-single,pins = <
+			OMAP4_IOPAD(0x114, PIN_INPUT | MUX_MODE3)		/* abe_dmic_din2.gpio_121: sdmmc3_wp */
+			OMAP4_IOPAD(0x116, PIN_INPUT | MUX_MODE3)		/* abe_dmic_din3.gpio_122: sdmmc3_cd */
+			OMAP4_IOPAD(0x174, PIN_INPUT | MUX_MODE2)		/* usbb2_ulpitll_dat6.sdmcc3_cmd */
+			OMAP4_IOPAD(0x176, PIN_INPUT | MUX_MODE2)		/* usbb2_ulpitll_dat7.sdmmc3_clk */
+			OMAP4_IOPAD(0x11c, PIN_INPUT | MUX_MODE1)		/* uart2_rx.sdmcc3_dat0 */
+			OMAP4_IOPAD(0x11e, PIN_INPUT | MUX_MODE1)		/* uart2_tx.sdmcc3_dat1 */
+		>;
+	};
+};
+
+&i2c2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c2_pins>;
+
+	clock-frequency = <400000>;
+
+	uart56: sc16is762@48 {
+		compatible = "nxp,sc16is762";
+		reg = <0x48>;
+		clocks = <&uart56_clk>;
+
+		interrupt-parent = <&gpio2>;
+		interrupts = <12 IRQ_TYPE_EDGE_FALLING>; /* gpmc_a20.gpio_44 */
+
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		uart5: serial@0 {
+			reg = <0>;
+		}; 
+
+		uart6: serial@1 {
+			reg = <1>;
+		};
+
+	};
+
+	uart78: sc16is762@49 {
+		compatible = "nxp,sc16is762";
+		reg = <0x49>;
+		clocks = <&uart78_clk>;
+
+		interrupt-parent = <&gpio2>;
+		interrupts = <16 IRQ_TYPE_EDGE_FALLING>; /* gpmc_a24.gpio_48 */
+
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		uart7: serial@2 {
+			reg = <2>;
+		}; 
+
+		uart8: serial@3 {
+			reg = <3>;
+		};
+
+	};
+};
+
+&i2c3 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c3_pins>;
+
+	clock-frequency = <100000>;
+
+	/* optional 1K EEPROM with revision information */
+	eeprom@51 {
+		compatible = "atmel,24c01";
+		reg = <0x51>;
+		pagesize = <8>;
+	};
+};
+
+&mmc3 {
+	status = "ok";
+
+	pinctrl-names = "default";
+	pinctrl-0 = <&mmc3_pins>;
+
+	ti,bus-width = <1>;
+	vmmc-supply = <&regulator_vdd18_mmc3>;
+
+	wp-gpios = <&gpio4 25 GPIO_ACTIVE_HIGH>;	/* gpio_121 */
+	cd-gpios = <&gpio4 26 GPIO_ACTIVE_HIGH>;	/* gpio_122 */
+	cd-inverted;
+	wp-inverted;
+};
+
+&uart3 {
+	interrupts-extended = <&wakeupgen GIC_SPI 74 IRQ_TYPE_LEVEL_HIGH
+			       &omap4_pmx_core OMAP4_UART3_RX>;
+};
+
+&uart5 {
+	pm: atmega328p {
+		compatible = "ulb,bb-avr";
+		current-speed = <57600>;
+
+		actuator_power: regulator {
+			compatible = "ulb,bb-avr-regulator";
+			domain = "actuators";
+		};
+	}; 
+};
+
+&uart6 {
+	sensact: atmega328p {
+		compatible = "ulb,bb-avr";
+		current-speed = <57600>;
+
+		dds_actuator {
+			compatible = "ulb,bb-avr-dds-actuator";
+			actuator-supply = <&actuator_power>;
+		};
+
+		dds_sensor {
+			compatible = "ulb,bb-avr-dds-sensor";
+		};
+	};
+};
+
+&uart7 {
+	manip: atmega328p {
+		compatible = "ulb,bb-avr";
+		current-speed = <57600>;
+
+		las_actuator {
+			compatible = "ulb,bb-avr-las-actuator";
+		};
+
+		las_sensor {
+			compatible = "ulb,bb-avr-las-sensor";
+		};
+
+		ems {
+			compatible = "ulb,bb-avr-ems";
+		};
+
+		nfc {
+			compatible = "ulb,bb-avr-nfc";
+		};
+
+		i2c5: i2c {
+			compatible = "ulb,bb-avr-i2c";
+		};
+	};
+};
+
+&i2c5 {
+	mux: pca9544@70 {
+		compatible = "nxp,pca9544";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x70>;
+
+		i2c@0 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0>;
+			
+			vcnl4010@13 {
+				compatible = "vishay,vcnl4010";
+			label = "left";
+				reg = <0x13>;
+				vdd-supply = <&actuator_power>;
+			};
+		};
+
+		i2c@1 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <1>;
+			
+			vcnl4010@13 {
+				compatible = "vishay,vcnl4010";
+				label = "right";
+				reg = <0x13>;
+			};
+		};
+
+		i2c@2 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <2>;
+			
+			vcnl4010@13 {
+				compatible = "vishay,vcnl4010";
+				label = "underneath";
+				reg = <0x13>;
+			};
+		};
+
+		i2c@3 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <3>;
+			
+			vcnl4010@13 {
+				compatible = "vishay,vcnl4010";
+				label = "front";
+				reg = <0x13>;
+			};
+		};
+	};
+};
+
+

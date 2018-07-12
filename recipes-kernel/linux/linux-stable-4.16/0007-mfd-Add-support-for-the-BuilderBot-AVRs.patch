@@ -1,0 +1,517 @@
+From 92a515eed5f91eee0ae97237665a071bf7565182 Mon Sep 17 00:00:00 2001
+From: Michael Allwright <allsey87@gmail.com>
+Date: Thu, 12 Jul 2018 16:01:09 +0200
+Subject: [PATCH] mfd: Add support for the BuilderBot AVRs
+
+---
+ drivers/mfd/Kconfig        |   7 +
+ drivers/mfd/Makefile       |   1 +
+ drivers/mfd/bb-avr.c       | 400 +++++++++++++++++++++++++++++++++++++++++++++
+ include/linux/mfd/bb-avr.h |  61 +++++++
+ 4 files changed, 469 insertions(+)
+ create mode 100644 drivers/mfd/bb-avr.c
+ create mode 100644 include/linux/mfd/bb-avr.h
+
+diff --git a/drivers/mfd/Kconfig b/drivers/mfd/Kconfig
+index b860eb5..0f81af7 100644
+--- a/drivers/mfd/Kconfig
++++ b/drivers/mfd/Kconfig
+@@ -1856,5 +1856,12 @@ config RAVE_SP_CORE
+ 	  Select this to get support for the Supervisory Processor
+ 	  device found on several devices in RAVE line of hardware.
+ 
++config BUILDERBOT_AVR_CORE
++	tristate "BuilderBot AVR core driver"
++	depends on SERIAL_DEV_BUS
++	help
++	  Select this to get support for devices connected to the BuilderBot
++	  AVR microcontrollers.
++
+ endmenu
+ endif
+diff --git a/drivers/mfd/Makefile b/drivers/mfd/Makefile
+index d9d2cf0..3b6ae20 100644
+--- a/drivers/mfd/Makefile
++++ b/drivers/mfd/Makefile
+@@ -228,4 +228,5 @@ obj-$(CONFIG_MFD_STM32_TIMERS) 	+= stm32-timers.o
+ obj-$(CONFIG_MFD_MXS_LRADC)     += mxs-lradc.o
+ obj-$(CONFIG_MFD_SC27XX_PMIC)	+= sprd-sc27xx-spi.o
+ obj-$(CONFIG_RAVE_SP_CORE)	+= rave-sp.o
++obj-$(CONFIG_BUILDERBOT_AVR_CORE)	+= bb-avr.o
+ 
+diff --git a/drivers/mfd/bb-avr.c b/drivers/mfd/bb-avr.c
+new file mode 100644
+index 0000000..6223d6a
+--- /dev/null
++++ b/drivers/mfd/bb-avr.c
+@@ -0,0 +1,400 @@
++// SPDX-License-Identifier: GPL-2.0+
++
++/*
++ * Multifunction core driver for the BuilderBot AVR MCUs. This driver
++ * is derived from Zodiac Inflight Innovations' RAVE Supervisory
++ * Processor(SP) MCU multifunction core driver.
++ *
++ * Copyright (C) 2018 Michael Allwright
++ */
++
++#include <linux/atomic.h>
++#include <linux/delay.h>
++#include <linux/export.h>
++#include <linux/init.h>
++#include <linux/slab.h>
++#include <linux/kernel.h>
++#include <linux/mfd/bb-avr.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/of_device.h>
++#include <linux/sched.h>
++#include <linux/serdev.h>
++#include <asm/unaligned.h>
++
++#define BB_AVR_RX_BUFFER_SIZE 32
++#define BB_AVR_TX_BUFFER_SIZE 32
++
++#define BB_AVR_PREAMBLE1  0xF0
++#define BB_AVR_PREAMBLE2  0xCA
++#define BB_AVR_POSTAMBLE1 0x53
++#define BB_AVR_POSTAMBLE2 0x0F
++
++#define BB_AVR_PREAMBLE_SIZE 2
++#define BB_AVR_COMMAND_FIELD_SIZE 1
++#define BB_AVR_DATA_LENGTH_FIELD_SIZE 1
++#define BB_AVR_CHECKSUM_SIZE 1
++#define BB_AVR_POSTAMBLE_SIZE 2
++
++#define BB_AVR_NON_DATA_SIZE (BB_AVR_PREAMBLE_SIZE +		\
++			      BB_AVR_COMMAND_FIELD_SIZE +	\
++			      BB_AVR_DATA_LENGTH_FIELD_SIZE +	\
++			      BB_AVR_CHECKSUM_SIZE +		\
++			      BB_AVR_POSTAMBLE_SIZE)
++
++#define BB_AVR_COMMAND_OFFSET 2
++#define BB_AVR_DATA_LENGTH_OFFSET 3
++#define BB_AVR_DATA_START_OFFSET 4
++#define BB_AVR_CHECKSUM_OFFSET -3
++
++/**
++ * enum bb_avr_deframer_state - Possible states for the deframer
++ *
++ * @BB_AVR_SRCH_PREAMBLE1:	Search for the first preamble byte
++ * @BB_AVR_SRCH_PREAMBLE2:	Search for the second preamble byte
++ * @BB_AVR_SRCH_POSTAMBLE1:	Search for the first postamble byte
++ * @BB_AVR_SRCH_POSTAMBLE2:	Search for the second postamble byte
++ */
++enum bb_avr_deframer_state {
++	BB_AVR_SRCH_PREAMBLE1,
++	BB_AVR_SRCH_PREAMBLE2,
++	BB_AVR_SRCH_POSTAMBLE1,
++	BB_AVR_SRCH_POSTAMBLE2,
++};
++
++/**
++ * struct bb_avr_deframer - Device protocol deframer
++ *
++ * @state:	Current state of the deframer
++ * @data:	Buffer for collecting data
++ * @data_ptr:	Current parsing position
++ * @used_len:	Number of bytes used in the buffer
++ */
++struct bb_avr_deframer {
++	enum bb_avr_deframer_state state;
++	unsigned char data[BB_AVR_RX_BUFFER_SIZE];
++	u8 data_ptr;
++	u8 used_len;
++};
++
++/**
++ * struct bb_avr_reply - Reply as per RAVE device protocol
++ *
++ * @length:	Expected reply length
++ * @data:	Buffer to store reply data in
++ * @command:	Expected reply command
++ * @completion:	Successful reply reception completion
++ */
++struct bb_avr_reply {
++	size_t length;
++	void  *data;
++	enum bb_avr_command command;
++	struct completion received;
++};
++
++/**
++ * struct bb_avr - BuilderBot AVR
++ *
++ * @serdev:	Pointer to underlying serdev
++ * @deframer:	Stored state of the protocol deframer
++ * @bus_lock:	Lock to serialize access to the device
++ * @reply_lock:	Lock protecting @reply
++ * @reply:	Pointer to memory to store reply payload
++ *
++ */
++struct bb_avr {
++	struct serdev_device *serdev;
++	struct bb_avr_deframer deframer;
++	struct mutex bus_lock;
++	struct mutex reply_lock;
++	struct bb_avr_reply *reply;
++};
++
++static u8 bb_avr_checksum(const u8 *data, u8 data_size)
++{
++	u8 checksum = 0;
++   size_t index;
++	for(index = BB_AVR_COMMAND_OFFSET;
++	    index < ((BB_AVR_DATA_START_OFFSET + data[BB_AVR_DATA_LENGTH_OFFSET] > data_size) ?
++		     data_size : (BB_AVR_DATA_START_OFFSET + data[BB_AVR_DATA_LENGTH_OFFSET]));
++	    index++) {
++		checksum += data[index];
++	}
++	return checksum;
++}
++
++static int bb_avr_write(struct bb_avr *avr, enum bb_avr_command command,
++                        const u8 *data, u8 data_size)
++{
++	unsigned char tx_buffer[BB_AVR_TX_BUFFER_SIZE];
++	unsigned char *dest = tx_buffer;
++	const unsigned char *src = data;
++	const unsigned char *end = data + data_size;
++   size_t tx_data_size = data_size + BB_AVR_NON_DATA_SIZE;
++
++	if (WARN_ON(tx_data_size > sizeof(tx_buffer)))
++		return -ENOMEM;
++
++	*dest++ = BB_AVR_PREAMBLE1;
++	*dest++ = BB_AVR_PREAMBLE2;
++	*dest++ = command;
++	*dest++ = data_size;
++	while(src < end) {
++		*dest++ = *src++;
++	}
++	*dest++ = bb_avr_checksum(tx_buffer, BB_AVR_TX_BUFFER_SIZE);
++	*dest++ = BB_AVR_POSTAMBLE1;
++	*dest++ = BB_AVR_POSTAMBLE2;
++
++	print_hex_dump(KERN_DEBUG, "bb-avr tx: ", DUMP_PREFIX_NONE,
++		       16, 1, tx_buffer, tx_data_size, false);
++
++	return serdev_device_write(avr->serdev, tx_buffer, tx_data_size, HZ);
++}
++
++
++int bb_avr_exec(struct bb_avr *avr, enum bb_avr_command command,
++		const void *data, size_t data_size,
++		void *reply_data, size_t reply_data_size)
++{
++	struct bb_avr_reply reply = {
++		.data     = reply_data,
++		.length   = reply_data_size,
++		.command  = command,
++		.received = COMPLETION_INITIALIZER_ONSTACK(reply.received),
++	};
++	int ret = 0;
++
++	mutex_lock(&avr->bus_lock);
++
++   if(reply_data_size > 0) {
++	   mutex_lock(&avr->reply_lock);
++	   avr->reply = &reply;
++	   mutex_unlock(&avr->reply_lock);
++   }
++
++	bb_avr_write(avr, command, data, data_size);
++
++   if(reply_data_size > 0) {
++	   if (!wait_for_completion_timeout(&reply.received, HZ)) {
++		   dev_err(&avr->serdev->dev, "Reply timeout\n");
++		   ret = -ETIMEDOUT;
++
++		   mutex_lock(&avr->reply_lock);
++		   avr->reply = NULL;
++		   mutex_unlock(&avr->reply_lock);
++	   }
++   }
++
++	mutex_unlock(&avr->bus_lock);
++	return ret;
++}
++EXPORT_SYMBOL_GPL(bb_avr_exec);
++
++static bool bb_avr_receive_reply(struct bb_avr *avr,
++				 const unsigned char *data, size_t length)
++{
++	struct device *dev = &avr->serdev->dev;
++	struct bb_avr_reply *reply;
++	bool ret = false;
++
++	mutex_lock(&avr->reply_lock);
++	reply = avr->reply;
++
++	if (reply) {
++		if (reply->command == data[BB_AVR_COMMAND_OFFSET] && 
++		    reply->length == data[BB_AVR_DATA_LENGTH_OFFSET]) {
++			/*
++			 * We are relying on memcpy(dst, src, 0) to be a no-op
++			 * when handling commands that have a no-payload reply
++			 */
++			memcpy(reply->data, data + BB_AVR_DATA_START_OFFSET, reply->length);
++			complete(&reply->received);
++			avr->reply = NULL;
++			ret = true;
++		} else {
++			dev_err(dev, "Ignoring incorrect reply\n");
++			dev_err(dev, "Command: expected = 0x%02x, received = 0x%02x\n",
++				reply->command, data[BB_AVR_COMMAND_OFFSET]);
++			dev_err(dev, "Length: expected = %zu, received = %u\n",
++				reply->length, data[BB_AVR_DATA_LENGTH_OFFSET]);
++		}
++	}
++
++	mutex_unlock(&avr->reply_lock);
++
++	return ret;
++}
++
++static bool bb_avr_receive_frame(struct bb_avr *avr,
++				 const unsigned char *data,
++				 size_t length)
++{
++	struct device *dev = &avr->serdev->dev;
++	u8 checksum = bb_avr_checksum(data, BB_AVR_RX_BUFFER_SIZE);
++	if (data[length - 3] != checksum) {
++		dev_dbg(dev, "Ignoring bad frame\n");
++		return false;
++	}
++	else {
++		print_hex_dump(KERN_DEBUG, "bb-avr rx: ", DUMP_PREFIX_NONE,
++			       16, 1, data, length, false);
++	}
++	return bb_avr_receive_reply(avr, data, length);
++}
++
++static void bb_avr_adjust_buf(struct bb_avr_deframer *deframer) 
++{
++	size_t reparse_offset, buf_idx;
++	/* Search for the beginning of a preamble in buffer */
++	for(reparse_offset = 1;
++	    reparse_offset < deframer->used_len;
++	    reparse_offset++) {
++		if(deframer->data[reparse_offset] == BB_AVR_PREAMBLE1)
++			break;
++	}
++	/* Shift data down in buffer */
++	for(buf_idx = reparse_offset;
++	    buf_idx < deframer->used_len;
++	    buf_idx++) {
++		deframer->data[buf_idx - reparse_offset] = deframer->data[buf_idx];
++	}
++	deframer->used_len -= reparse_offset;
++	/* Reparse the buffer */
++	deframer->data_ptr = 0;
++	deframer->state = BB_AVR_SRCH_PREAMBLE1;
++}
++
++static int bb_avr_receive_buf(struct serdev_device *serdev,
++			      const unsigned char *buf, size_t size)
++{
++	struct device *dev = &serdev->dev;
++	struct bb_avr *avr = dev_get_drvdata(dev);
++	struct bb_avr_deframer *deframer = &avr->deframer;
++	const unsigned char *src = buf;
++	const unsigned char *end = buf + size;
++	u8 rx_byte = 0;
++
++	while(src < end || deframer->data_ptr < deframer->used_len) {
++		/* fetch or refetch the next byte */
++		if(deframer->data_ptr < deframer->used_len) {
++			rx_byte = deframer->data[deframer->data_ptr];
++			deframer->data_ptr++;
++		}     
++		else if(src < end) {
++			rx_byte = *src++;
++			deframer->data[deframer->data_ptr++] = rx_byte;
++			deframer->used_len++;
++		}
++		else {
++			break;
++		}
++		/* step the deframer state machine */
++		switch(deframer->state) {
++		case BB_AVR_SRCH_PREAMBLE1:
++			if(rx_byte != BB_AVR_PREAMBLE1) {
++				bb_avr_adjust_buf(deframer);
++			}
++			else {
++				deframer->state = BB_AVR_SRCH_PREAMBLE2;
++			}
++			break;
++		case BB_AVR_SRCH_PREAMBLE2:
++			if(rx_byte != BB_AVR_PREAMBLE2) {
++				bb_avr_adjust_buf(deframer);
++			}
++			else {
++				deframer->state = BB_AVR_SRCH_POSTAMBLE1;
++			}
++			break;
++		case BB_AVR_SRCH_POSTAMBLE1:
++			if(deframer->data_ptr > BB_AVR_DATA_LENGTH_OFFSET &&
++			   deframer->data_ptr == deframer->data[BB_AVR_DATA_LENGTH_OFFSET] + 
++			   BB_AVR_NON_DATA_SIZE - 1) {  
++				if(rx_byte == BB_AVR_POSTAMBLE1) {
++					deframer->state = BB_AVR_SRCH_POSTAMBLE2;     
++				}
++				else {
++					bb_avr_adjust_buf(deframer);
++				}
++			}
++			break;
++		case BB_AVR_SRCH_POSTAMBLE2:
++			if(deframer->data_ptr > BB_AVR_DATA_LENGTH_OFFSET &&
++			   deframer->data_ptr == deframer->data[BB_AVR_DATA_LENGTH_OFFSET] +
++			   BB_AVR_NON_DATA_SIZE) {
++				if(rx_byte == BB_AVR_POSTAMBLE2) {
++					bb_avr_receive_frame(avr, deframer->data, deframer->data_ptr);
++				}
++				bb_avr_adjust_buf(deframer);
++			}
++			break;
++		default:
++			dev_err(dev, "Deframer in unimplemented state");
++			break;
++		}
++		/* if the buffer is about to overflow, adjust it */
++		if(deframer->data_ptr == BB_AVR_RX_BUFFER_SIZE) {
++			bb_avr_adjust_buf(deframer);
++		}
++	}
++	return size;
++}
++
++static const struct of_device_id bb_avr_dt_ids[] = {
++	{ .compatible = "ulb,bb-avr" },
++	{ /* sentinel */ }
++};
++
++static const struct serdev_device_ops bb_avr_serdev_device_ops = {
++	.receive_buf  = bb_avr_receive_buf,
++	.write_wakeup = serdev_device_write_wakeup,
++};
++
++static int bb_avr_probe(struct serdev_device *serdev)
++{
++	struct device *dev = &serdev->dev;
++	struct bb_avr *avr;
++	u32 speed;
++	int ret;
++
++	if (of_property_read_u32(dev->of_node, "current-speed", &speed)) {
++		dev_err(dev,
++			"'current-speed' is not specified in device node\n");
++		return -EINVAL;
++	}
++
++	avr = devm_kzalloc(dev, sizeof(*avr), GFP_KERNEL);
++	if (!avr)
++		return -ENOMEM;
++
++	avr->serdev = serdev;
++	dev_set_drvdata(dev, avr);
++
++	mutex_init(&avr->bus_lock);
++	mutex_init(&avr->reply_lock);
++
++	serdev_device_set_client_ops(serdev, &bb_avr_serdev_device_ops);
++	ret = devm_serdev_device_open(dev, serdev);
++	if (ret)
++		return ret;
++
++	serdev_device_set_baudrate(serdev, speed);
++
++	return devm_of_platform_populate(dev);
++}
++
++MODULE_DEVICE_TABLE(of, bb_avr_dt_ids);
++
++static struct serdev_device_driver bb_avr_drv = {
++	.probe			= bb_avr_probe,
++	.driver = {
++		.name		= "bb-avr",
++		.of_match_table	= bb_avr_dt_ids,
++	},
++};
++module_serdev_device_driver(bb_avr_drv);
++
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("Michael Allwright <allsey87@gmail.com>");
++MODULE_DESCRIPTION("BuilderBot AVR core driver");
+diff --git a/include/linux/mfd/bb-avr.h b/include/linux/mfd/bb-avr.h
+new file mode 100644
+index 0000000..e76c2fa
+--- /dev/null
++++ b/include/linux/mfd/bb-avr.h
+@@ -0,0 +1,61 @@
++/*
++ * Core definitions for the BuilderBot AVR MFD driver.
++ */
++
++#ifndef _LINUX_BB_AVR_H_
++#define _LINUX_BB_AVR_H_
++
++enum bb_avr_command {
++	BB_AVR_CMD_GET_UPTIME = 0x00,
++	BB_AVR_CMD_GET_BATT_LVL = 0x01,
++	/* Sensor-Actuator MCU */
++   BB_AVR_CMD_SET_DDS_ENABLE = 0x10,
++   BB_AVR_CMD_SET_DDS_SPEED = 0x11,
++   BB_AVR_CMD_GET_DDS_SPEED  = 0x13,
++   BB_AVR_CMD_SET_DDS_PARAMS = 0x14,
++   BB_AVR_CMD_GET_DDS_PARAMS = 0x15,
++	BB_AVR_CMD_GET_ACCEL_READING = 0x20,
++	/* Power Management MCU */
++	BB_AVR_CMD_SET_ACTUATOR_POWER_ENABLE = 0x40,
++	BB_AVR_CMD_SET_ACTUATOR_INPUT_LIMIT_OVERRIDE = 0x41,
++	BB_AVR_CMD_SET_USBIF_ENABLE = 0x42,
++	BB_AVR_CMD_REQ_SOFT_PWDN = 0x43,
++	BB_AVR_CMD_GET_PM_STATUS = 0x44,
++	BB_AVR_CMD_GET_USB_STATUS = 0x45,         
++	/* Manipulator MCU */
++	BB_AVR_CMD_GET_CHARGER_STATUS = 0x60,
++	BB_AVR_CMD_SET_LIFT_ACTUATOR_POSITION = 0x70,
++	BB_AVR_CMD_GET_LIFT_ACTUATOR_POSITION = 0x71,
++	BB_AVR_CMD_SET_LIFT_ACTUATOR_SPEED = 0x72,
++	BB_AVR_CMD_GET_LIMIT_SWITCH_STATE = 0x73,
++	BB_AVR_CMD_CALIBRATE_LIFT_ACTUATOR = 0x74,
++	BB_AVR_CMD_EMER_STOP_LIFT_ACTUATOR = 0x75,
++	BB_AVR_CMD_GET_LIFT_ACTUATOR_STATE = 0x76,
++	BB_AVR_CMD_SET_EM_CHARGE_MODE = 0x80,
++	BB_AVR_CMD_SET_EM_DISCHARGE_MODE = 0x81,
++	BB_AVR_CMD_GET_EM_ACCUM_VOLTAGE = 0x82,
++	BB_AVR_CMD_GET_RF_RANGE = 0x90,
++	BB_AVR_CMD_GET_RF_AMBIENT = 0x91,
++	BB_AVR_CMD_READ_NFC = 0xA0,
++	BB_AVR_CMD_WRITE_NFC = 0xA1,
++	BB_AVR_CMD_READ_SMBUS_BYTE = 0xC0,
++	BB_AVR_CMD_READ_SMBUS_BYTE_DATA = 0xC1,
++	BB_AVR_CMD_READ_SMBUS_WORD_DATA = 0xC2,
++	BB_AVR_CMD_READ_SMBUS_BLOCK_DATA = 0xC3,
++	BB_AVR_CMD_READ_SMBUS_I2C_BLOCK_DATA = 0xC4,
++	BB_AVR_CMD_WRITE_SMBUS_BYTE = 0xD0,
++	BB_AVR_CMD_WRITE_SMBUS_BYTE_DATA = 0xD1,
++	BB_AVR_CMD_WRITE_SMBUS_WORD_DATA = 0xD2,
++	BB_AVR_CMD_WRITE_SMBUS_BLOCK_DATA = 0xD3,
++	BB_AVR_CMD_WRITE_SMBUS_I2C_BLOCK_DATA = 0xD4,
++   /* Other */
++	BB_AVR_CMD_INVALID = 0xFF,
++};
++
++struct bb_avr;
++
++int bb_avr_exec(struct bb_avr *avr, enum bb_avr_command command,
++		const void *data, size_t data_size,
++		void *reply_data, size_t reply_data_size);
++
++#endif /* _LINUX_BB_AVR_H_ */
+-- 
+2.7.4
+

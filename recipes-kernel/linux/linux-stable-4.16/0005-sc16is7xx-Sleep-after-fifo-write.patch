@@ -1,0 +1,26 @@
+From 9e6c0d1d996b370d25f235f52296abd2579df819 Mon Sep 17 00:00:00 2001
+From: Michael Allwright <allsey87@gmail.com>
+Date: Tue, 10 Jul 2018 16:07:44 +0200
+Subject: [PATCH] sc16is7xx: Sleep after fifo write
+
+---
+ drivers/tty/serial/sc16is7xx.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/tty/serial/sc16is7xx.c b/drivers/tty/serial/sc16is7xx.c
+index 65792a3..e072d42 100644
+--- a/drivers/tty/serial/sc16is7xx.c
++++ b/drivers/tty/serial/sc16is7xx.c
+@@ -395,6 +395,9 @@ static void sc16is7xx_fifo_write(struct uart_port *port, u8 to_send)
+ 	regcache_cache_bypass(s->regmap, true);
+ 	regmap_raw_write(s->regmap, addr, s->buf, to_send);
+ 	regcache_cache_bypass(s->regmap, false);
++
++	/* sleep a bit to improve stability when using both UARTs */
++	usleep_range(1000,2500);
+ }
+ 
+ static void sc16is7xx_port_update(struct uart_port *port, u8 reg,
+-- 
+2.7.4
+
