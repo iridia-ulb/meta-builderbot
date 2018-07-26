@@ -186,10 +186,15 @@
 		compatible = "ulb,bb-avr";
 		current-speed = <57600>;
 
-		actuator_power: regulator {
+		actr_power: regulator {
 			compatible = "ulb,bb-avr-regulator";
 			domain = "actuators";
 		};
+
+		poweroff {
+			compatible = "ulb,bb-avr-poweroff";
+		};
+
 	}; 
 };
 
@@ -198,13 +203,13 @@
 		compatible = "ulb,bb-avr";
 		current-speed = <57600>;
 
-		dds_actuator {
-			compatible = "ulb,bb-avr-dds-actuator";
-			actuator-supply = <&actuator_power>;
+		dds_actr {
+			compatible = "ulb,bb-avr-dds-actr";
+			vdd-supply = <&actr_power>;
 		};
 
-		dds_sensor {
-			compatible = "ulb,bb-avr-dds-sensor";
+		dds_sens {
+			compatible = "ulb,bb-avr-dds-sens";
 		};
 	};
 };
@@ -214,12 +219,12 @@
 		compatible = "ulb,bb-avr";
 		current-speed = <57600>;
 
-		las_actuator {
-			compatible = "ulb,bb-avr-las-actuator";
+		las_actr {
+			compatible = "ulb,bb-avr-las-actr";
 		};
 
-		las_sensor {
-			compatible = "ulb,bb-avr-las-sensor";
+		las_sens {
+			compatible = "ulb,bb-avr-las-sens";
 		};
 
 		ems {
@@ -250,9 +255,9 @@
 			
 			vcnl4010@13 {
 				compatible = "vishay,vcnl4010";
-			label = "left";
+				label = "left";
 				reg = <0x13>;
-				vdd-supply = <&actuator_power>;
+				vdd-supply = <&actr_power>;
 			};
 		};
 
@@ -265,6 +270,7 @@
 				compatible = "vishay,vcnl4010";
 				label = "right";
 				reg = <0x13>;
+				vdd-supply = <&actr_power>;
 			};
 		};
 
@@ -277,6 +283,7 @@
 				compatible = "vishay,vcnl4010";
 				label = "underneath";
 				reg = <0x13>;
+				vdd-supply = <&actr_power>;
 			};
 		};
 
@@ -289,6 +296,7 @@
 				compatible = "vishay,vcnl4010";
 				label = "front";
 				reg = <0x13>;
+				vdd-supply = <&actr_power>;
 			};
 		};
 	};

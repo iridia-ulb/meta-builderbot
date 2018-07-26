@@ -1,4 +1,4 @@
-obj-m := bb-avr-las-sensor.o bb-avr-las-actuator.o
+obj-m := bb-avr-las-sens.o bb-avr-las-actr.o
 
 SRC := $(shell pwd)
 

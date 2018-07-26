@@ -24,7 +24,9 @@ KERNEL_EXTRA_INSTALL = " \
     kernel-module-bb-avr-i2c \
     kernel-module-bb-avr-las \
     kernel-module-bb-avr-nfc \
+    kernel-module-bb-avr-poweroff \
     kernel-module-bb-avr-regulator \
+    kernel-module-bb-avr-uptime \
     kernel-module-ov5640 \
 "
 

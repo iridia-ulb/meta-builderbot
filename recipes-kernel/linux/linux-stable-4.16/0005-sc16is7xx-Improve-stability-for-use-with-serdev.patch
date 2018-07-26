@@ -1,0 +1,61 @@
+From 247586b8f20197d243b49cd692d28539cb796a39 Mon Sep 17 00:00:00 2001
+From: Michael Allwright <allsey87@gmail.com>
+Date: Wed, 25 Jul 2018 15:32:18 +0200
+Subject: [PATCH] sc16is7xx: Improve stability for use with serdev
+
+---
+ drivers/tty/serial/sc16is7xx.c | 16 +++++++++++++++-
+ 1 file changed, 15 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/tty/serial/sc16is7xx.c b/drivers/tty/serial/sc16is7xx.c
+index 65792a3..8894c5f 100644
+--- a/drivers/tty/serial/sc16is7xx.c
++++ b/drivers/tty/serial/sc16is7xx.c
+@@ -325,6 +325,7 @@ struct sc16is7xx_port {
+ 	struct gpio_chip		gpio;
+ #endif
+ 	unsigned char			buf[SC16IS7XX_FIFO_SIZE];
++	bool				ready;
+ 	struct kthread_worker		kworker;
+ 	struct task_struct		*kworker_task;
+ 	struct kthread_work		irq_work;
+@@ -395,6 +396,9 @@ static void sc16is7xx_fifo_write(struct uart_port *port, u8 to_send)
+ 	regcache_cache_bypass(s->regmap, true);
+ 	regmap_raw_write(s->regmap, addr, s->buf, to_send);
+ 	regcache_cache_bypass(s->regmap, false);
++
++	/* Sleep a bit to improve stability when using both UARTs */
++	usleep_range(1500,2500);
+ }
+ 
+ static void sc16is7xx_port_update(struct uart_port *port, u8 reg,
+@@ -963,6 +967,13 @@ static int sc16is7xx_startup(struct uart_port *port)
+ 	struct sc16is7xx_port *s = dev_get_drvdata(port->dev);
+ 	unsigned int val;
+ 
++	/* Wait for probe to finish */
++	while (!s->ready) {
++		usleep_range(1000, 2500);
++	}
++	usleep_range(1000, 2500);
++
++	/* Power up the device */
+ 	sc16is7xx_power(port, 1);
+ 
+ 	/* Reset FIFOs*/
+@@ -1261,8 +1272,11 @@ static int sc16is7xx_probe(struct device *dev,
+ 	/* Setup interrupt */
+ 	ret = devm_request_irq(dev, irq, sc16is7xx_irq,
+ 			       flags, dev_name(dev), s);
+-	if (!ret)
++
++	if (!ret) {
++		s->ready = true;
+ 		return 0;
++	}
+ 
+ out_ports:
+ 	for (i--; i >= 0; i--) {
+-- 
+2.7.4
+

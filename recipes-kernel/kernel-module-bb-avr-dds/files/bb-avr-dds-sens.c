@@ -24,7 +24,7 @@
 #include <linux/iio/triggered_buffer.h>
 
 static const struct of_device_id bb_avr_dds_of_match[] = {
-	{ .compatible = "ulb,bb-avr-dds-sensor" },
+	{ .compatible = "ulb,bb-avr-dds-sens" },
 	{ /* sentinel */ }
 };
 
@@ -37,24 +37,7 @@ struct bb_avr_dds {
 	struct bb_avr *avr;
 };
 
-static int bb_avr_dds_read_raw(struct iio_dev *indio_dev,
-			       struct iio_chan_spec const *chan,
-			       int *val, int *val2, long m)
-{
-	return -ENOSYS;
-}	
-
-
-static int bb_avr_dds_write_raw(struct iio_dev *indio_dev,
-				struct iio_chan_spec const *chan,
-				int val, int val2, long mask) {
-	return -ENOSYS;
-}
-
-static const struct iio_info bb_avr_dds_info = {
-	.read_raw = bb_avr_dds_read_raw,
-	.write_raw = bb_avr_dds_write_raw,
-};
+static const struct iio_info bb_avr_dds_info = {};
 
 static const struct iio_chan_spec bb_avr_dds_channels[] = {
 	{
@@ -117,7 +100,7 @@ static int bb_avr_dds_probe(struct platform_device *pdev)
 	dds->avr = dev_get_drvdata(dev->parent);
 	/* set up the indio_dev struct */
 	dev_set_drvdata(&pdev->dev, indio_dev);
-	indio_dev->name = "dds-sensor";
+	indio_dev->name = "dds-sens";
 	indio_dev->dev.parent = &pdev->dev;
 	indio_dev->info = &bb_avr_dds_info;
 	indio_dev->modes = INDIO_BUFFER_SOFTWARE;
@@ -149,7 +132,7 @@ static struct platform_driver bb_avr_dds_driver = {
 	.probe = bb_avr_dds_probe,
 	.remove = bb_avr_dds_remove,
 	.driver = {
-		.name = "bb-avr-dds-sensor",
+		.name = "bb-avr-dds-sens",
 		.of_match_table = bb_avr_dds_of_match,
 	},
 };

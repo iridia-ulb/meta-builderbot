@@ -1,0 +1,24 @@
+From 4729be65e70fedc55d907bf710e6b81032b15d6d Mon Sep 17 00:00:00 2001
+From: Michael Allwright <allsey87@gmail.com>
+Date: Thu, 26 Jul 2018 10:38:45 +0200
+Subject: [PATCH] kernel: GPL export symbol freeze_secondary_cpus
+
+---
+ kernel/cpu.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/kernel/cpu.c b/kernel/cpu.c
+index 53f7dc6..83ac278 100644
+--- a/kernel/cpu.c
++++ b/kernel/cpu.c
+@@ -1121,6 +1121,7 @@ int freeze_secondary_cpus(int primary)
+ 	cpu_maps_update_done();
+ 	return error;
+ }
++EXPORT_SYMBOL_GPL(freeze_secondary_cpus);
+ 
+ void __weak arch_enable_nonboot_cpus_begin(void)
+ {
+-- 
+2.7.4
+

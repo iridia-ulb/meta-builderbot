@@ -129,24 +129,7 @@ static const struct iio_chan_spec bb_avr_ems_channels[] = {
 
 static const unsigned long bb_avr_ems_scan_masks[] = {0x1, 0};
 
-static int bb_avr_ems_read_raw(struct iio_dev *indio_dev,
-                               struct iio_chan_spec const *chan,
-			       int *val, int *val2, long m)
-{
-	return -ENOSYS;
-}	
-
-
-static int bb_avr_ems_write_raw(struct iio_dev *indio_dev,
-				struct iio_chan_spec const *chan,
-				int val, int val2, long mask) {
-	return -ENOSYS;
-}
-
-static const struct iio_info bb_avr_ems_info = {
-	.read_raw = bb_avr_ems_read_raw,
-	.write_raw = bb_avr_ems_write_raw,
-};
+static const struct iio_info bb_avr_ems_info = {};
 
 static int bb_avr_ems_probe(struct platform_device *pdev)
 {

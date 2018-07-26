@@ -1,4 +1,4 @@
-obj-m := bb-avr-dds-actr.o bb-avr-dds-sens.o
+obj-m := bb-avr-uptime.o
 
 SRC := $(shell pwd)
 

@@ -1,14 +1,14 @@
-From 92a515eed5f91eee0ae97237665a071bf7565182 Mon Sep 17 00:00:00 2001
+From e0045cc994e0a58f2a85c1e8dcd90c60581a4d7c Mon Sep 17 00:00:00 2001
 From: Michael Allwright <allsey87@gmail.com>
-Date: Thu, 12 Jul 2018 16:01:09 +0200
+Date: Wed, 25 Jul 2018 16:20:28 +0200
 Subject: [PATCH] mfd: Add support for the BuilderBot AVRs
 
 ---
  drivers/mfd/Kconfig        |   7 +
  drivers/mfd/Makefile       |   1 +
  drivers/mfd/bb-avr.c       | 400 +++++++++++++++++++++++++++++++++++++++++++++
- include/linux/mfd/bb-avr.h |  61 +++++++
- 4 files changed, 469 insertions(+)
+ include/linux/mfd/bb-avr.h |  62 +++++++
+ 4 files changed, 470 insertions(+)
  create mode 100644 drivers/mfd/bb-avr.c
  create mode 100644 include/linux/mfd/bb-avr.h
 
@@ -41,7 +41,7 @@ index d9d2cf0..3b6ae20 100644
  
 diff --git a/drivers/mfd/bb-avr.c b/drivers/mfd/bb-avr.c
 new file mode 100644
-index 0000000..6223d6a
+index 0000000..3bb74ef
 --- /dev/null
 +++ b/drivers/mfd/bb-avr.c
 @@ -0,0 +1,400 @@
@@ -125,7 +125,7 @@ index 0000000..6223d6a
 +};
 +
 +/**
-+ * struct bb_avr_reply - Reply as per RAVE device protocol
++ * struct bb_avr_reply - Reply as per the BuilderBot AVR protocol
 + *
 + * @length:	Expected reply length
 + * @data:	Buffer to store reply data in
@@ -160,7 +160,7 @@ index 0000000..6223d6a
 +static u8 bb_avr_checksum(const u8 *data, u8 data_size)
 +{
 +	u8 checksum = 0;
-+   size_t index;
++	size_t index;
 +	for(index = BB_AVR_COMMAND_OFFSET;
 +	    index < ((BB_AVR_DATA_START_OFFSET + data[BB_AVR_DATA_LENGTH_OFFSET] > data_size) ?
 +		     data_size : (BB_AVR_DATA_START_OFFSET + data[BB_AVR_DATA_LENGTH_OFFSET]));
@@ -177,7 +177,7 @@ index 0000000..6223d6a
 +	unsigned char *dest = tx_buffer;
 +	const unsigned char *src = data;
 +	const unsigned char *end = data + data_size;
-+   size_t tx_data_size = data_size + BB_AVR_NON_DATA_SIZE;
++	size_t tx_data_size = data_size + BB_AVR_NON_DATA_SIZE;
 +
 +	if (WARN_ON(tx_data_size > sizeof(tx_buffer)))
 +		return -ENOMEM;
@@ -214,24 +214,24 @@ index 0000000..6223d6a
 +
 +	mutex_lock(&avr->bus_lock);
 +
-+   if(reply_data_size > 0) {
-+	   mutex_lock(&avr->reply_lock);
-+	   avr->reply = &reply;
-+	   mutex_unlock(&avr->reply_lock);
-+   }
++	if(reply_data_size > 0) {
++		mutex_lock(&avr->reply_lock);
++		avr->reply = &reply;
++		mutex_unlock(&avr->reply_lock);
++	}
 +
 +	bb_avr_write(avr, command, data, data_size);
 +
-+   if(reply_data_size > 0) {
-+	   if (!wait_for_completion_timeout(&reply.received, HZ)) {
-+		   dev_err(&avr->serdev->dev, "Reply timeout\n");
-+		   ret = -ETIMEDOUT;
++	if(reply_data_size > 0) {
++		if (!wait_for_completion_timeout(&reply.received, HZ)) {
++			dev_err(&avr->serdev->dev, "Reply timeout\n");
++			ret = -ETIMEDOUT;
 +
-+		   mutex_lock(&avr->reply_lock);
-+		   avr->reply = NULL;
-+		   mutex_unlock(&avr->reply_lock);
-+	   }
-+   }
++			mutex_lock(&avr->reply_lock);
++			avr->reply = NULL;
++			mutex_unlock(&avr->reply_lock);
++		}
++	}
 +
 +	mutex_unlock(&avr->bus_lock);
 +	return ret;
@@ -447,10 +447,10 @@ index 0000000..6223d6a
 +MODULE_DESCRIPTION("BuilderBot AVR core driver");
 diff --git a/include/linux/mfd/bb-avr.h b/include/linux/mfd/bb-avr.h
 new file mode 100644
-index 0000000..e76c2fa
+index 0000000..73b9ca1
 --- /dev/null
 +++ b/include/linux/mfd/bb-avr.h
-@@ -0,0 +1,61 @@
+@@ -0,0 +1,62 @@
 +/*
 + * Core definitions for the BuilderBot AVR MFD driver.
 + */
@@ -462,19 +462,20 @@ index 0000000..e76c2fa
 +	BB_AVR_CMD_GET_UPTIME = 0x00,
 +	BB_AVR_CMD_GET_BATT_LVL = 0x01,
 +	/* Sensor-Actuator MCU */
-+   BB_AVR_CMD_SET_DDS_ENABLE = 0x10,
-+   BB_AVR_CMD_SET_DDS_SPEED = 0x11,
-+   BB_AVR_CMD_GET_DDS_SPEED  = 0x13,
-+   BB_AVR_CMD_SET_DDS_PARAMS = 0x14,
-+   BB_AVR_CMD_GET_DDS_PARAMS = 0x15,
++	BB_AVR_CMD_SET_DDS_ENABLE = 0x10,
++	BB_AVR_CMD_SET_DDS_SPEED = 0x11,
++	BB_AVR_CMD_GET_DDS_SPEED  = 0x13,
++	BB_AVR_CMD_SET_DDS_PARAMS = 0x14,
++	BB_AVR_CMD_GET_DDS_PARAMS = 0x15,
 +	BB_AVR_CMD_GET_ACCEL_READING = 0x20,
 +	/* Power Management MCU */
++	BB_AVR_CMD_SET_SYSTEM_POWER_ENABLE = 0x39,
 +	BB_AVR_CMD_SET_ACTUATOR_POWER_ENABLE = 0x40,
 +	BB_AVR_CMD_SET_ACTUATOR_INPUT_LIMIT_OVERRIDE = 0x41,
 +	BB_AVR_CMD_SET_USBIF_ENABLE = 0x42,
 +	BB_AVR_CMD_REQ_SOFT_PWDN = 0x43,
 +	BB_AVR_CMD_GET_PM_STATUS = 0x44,
-+	BB_AVR_CMD_GET_USB_STATUS = 0x45,         
++	BB_AVR_CMD_GET_USB_STATUS = 0x45,
 +	/* Manipulator MCU */
 +	BB_AVR_CMD_GET_CHARGER_STATUS = 0x60,
 +	BB_AVR_CMD_SET_LIFT_ACTUATOR_POSITION = 0x70,
@@ -501,7 +502,7 @@ index 0000000..e76c2fa
 +	BB_AVR_CMD_WRITE_SMBUS_WORD_DATA = 0xD2,
 +	BB_AVR_CMD_WRITE_SMBUS_BLOCK_DATA = 0xD3,
 +	BB_AVR_CMD_WRITE_SMBUS_I2C_BLOCK_DATA = 0xD4,
-+   /* Other */
++	/* Other */
 +	BB_AVR_CMD_INVALID = 0xFF,
 +};
 +

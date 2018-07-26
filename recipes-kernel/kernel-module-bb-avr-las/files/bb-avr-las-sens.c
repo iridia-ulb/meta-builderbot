@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0+
 
 /*
- * Lift actuator system actuator driver for the BuilderBot
+ * Lift actuator system sensor driver for the BuilderBot
  *
  * Copyright (C) 2018 Michael Allwright
  */
@@ -22,12 +22,12 @@
 #include <linux/iio/triggered_buffer.h>
 
 static const struct of_device_id bb_avr_las_of_match[] = {
-	{ .compatible = "ulb,bb-avr-las-actuator" },
+	{ .compatible = "ulb,bb-avr-las-sens" },
 	{ /* sentinel */ }
 };
 
 /**
- * struct bb_avr_las - Lift actuator system actuator
+ * struct bb_avr_las - Lift actuator system sensor
  *
  * @avr: Pointer to parent BuilderBot AVR device
  */
@@ -35,65 +35,42 @@ struct bb_avr_las {
 	struct bb_avr *avr;
 };
 
-static int bb_avr_las_read_raw(struct iio_dev *indio_dev,
-                               struct iio_chan_spec const *chan,
-			       int *val, int *val2, long m)
-{
-	return -ENOSYS;
-}
+static const struct iio_info bb_avr_las_info = {};
 
-static int bb_avr_las_write_raw(struct iio_dev *indio_dev,
-				struct iio_chan_spec const *chan,
-				int val, int val2, long mask)
-{
-	return -ENOSYS;
-}
-
-static const struct iio_info bb_avr_las_info = {
-	.read_raw = bb_avr_las_read_raw,
-	.write_raw = bb_avr_las_write_raw,
+static const char * const bb_avr_las_state[] = {
+	"inactive", "position_control", "speed_control",
+	"cal_srch_top", "cal_srch_btm"
 };
 
-static ssize_t bb_avr_las_write_calibrate(struct iio_dev *indio_dev,
-				       uintptr_t private,
-				       struct iio_chan_spec const *ch,
-				       const char *buf, size_t len)
+static int bb_avr_las_get_state(struct iio_dev *indio_dev,
+				const struct iio_chan_spec *chan)
 {
 	struct bb_avr_las *las = iio_priv(indio_dev);
-	bb_avr_exec(las->avr, BB_AVR_CMD_CALIBRATE_LIFT_ACTUATOR,
-		    NULL, 0, NULL, 0);
-	return len;
+	u8 rx_data;
+
+	bb_avr_exec(las->avr, BB_AVR_CMD_GET_LIFT_ACTUATOR_STATE,
+		    NULL, 0, &rx_data, 1);
+
+	return rx_data;
 }
 
-static ssize_t bb_avr_las_write_emergency_stop(struct iio_dev *indio_dev,
-				       uintptr_t private,
-				       struct iio_chan_spec const *ch,
-				       const char *buf, size_t len)
-{
-	struct bb_avr_las *las = iio_priv(indio_dev);
-	bb_avr_exec(las->avr, BB_AVR_CMD_EMER_STOP_LIFT_ACTUATOR,
-		    NULL, 0, NULL, 0);
-	return len;
-}
+struct iio_enum bb_avr_las_state_enum = {
+	.items = bb_avr_las_state,
+	.num_items = ARRAY_SIZE(bb_avr_las_state),
+	.get = bb_avr_las_get_state,
+};
 
 static const struct iio_chan_spec_ext_info bb_avr_las_ext_info[] = {
-	{
-		.name = "calibrate",
-		.write = bb_avr_las_write_calibrate,
-		.shared = IIO_SHARED_BY_ALL,
-	}, {
-		.name = "emergency_stop",
-		.write = bb_avr_las_write_emergency_stop,
-		.shared = IIO_SHARED_BY_ALL,
-	},
+	IIO_ENUM("state", IIO_SHARED_BY_ALL, &bb_avr_las_state_enum),
+	{ /* sentinel */ },
 };
 
+
 static const struct iio_chan_spec bb_avr_las_channels[] = {
-  {
+	{
 		.type = IIO_DISTANCE,
-		.indexed = false,
+		.indexed = true,
 		.channel = 0,
-		.output = true,
 		.ext_info = bb_avr_las_ext_info,
 		.scan_index = 0,
 		.scan_type = {
@@ -102,7 +79,8 @@ static const struct iio_chan_spec bb_avr_las_channels[] = {
 			.storagebits = 8,
 			.endianness = IIO_BE,
 		},
-	}
+	},
+	IIO_CHAN_SOFT_TIMESTAMP(1),
 };
 
 static const unsigned long bb_avr_las_scan_masks[] = {0x1, 0};
@@ -112,27 +90,19 @@ static irqreturn_t bb_avr_las_trigger_handler(int irq, void *p)
 	struct iio_poll_func *pf = p;
 	struct iio_dev *indio_dev = pf->indio_dev;
 	struct bb_avr_las *las = iio_priv(indio_dev);
-	struct iio_buffer *buffer = indio_dev->buffer;
-
-	int ret;
+	int ret = 0;
 	u8 position;
 
-	ret = iio_buffer_remove_sample(buffer, &position);
-
-	if (ret < 0) {
-		dev_err(&indio_dev->dev,
-			"iio_buffer_remove_sample failed: %d", ret);
+	ret = bb_avr_exec(las->avr, BB_AVR_CMD_GET_LIFT_ACTUATOR_POSITION,
+			  NULL, 0, &position, 1);
+	if (ret < 0)
 		goto out;
-	}
-
-	bb_avr_exec(las->avr, BB_AVR_CMD_SET_LIFT_ACTUATOR_POSITION,
-		    &position, 1, NULL, 0);
+	iio_push_to_buffers_with_timestamp(indio_dev, &position,
+					   iio_get_time_ns(indio_dev));
 out:
 	iio_trigger_notify_done(indio_dev->trig);
 	return IRQ_HANDLED;
 }
-
-
 
 static int bb_avr_las_probe(struct platform_device *pdev)
 {
@@ -149,15 +119,18 @@ static int bb_avr_las_probe(struct platform_device *pdev)
 
 	/* set up the indio_dev struct */
 	dev_set_drvdata(&pdev->dev, indio_dev);
-	indio_dev->name = "las-actuator";
+	indio_dev->name = "las-sens";
 	indio_dev->dev.parent = &pdev->dev;
 	indio_dev->info = &bb_avr_las_info;
 	indio_dev->modes = INDIO_BUFFER_SOFTWARE;
 	indio_dev->channels = bb_avr_las_channels;
 	indio_dev->num_channels = ARRAY_SIZE(bb_avr_las_channels);
+	indio_dev->available_scan_masks = bb_avr_las_scan_masks;
 	
-	ret = iio_triggered_buffer_setup(indio_dev, NULL,
-					 bb_avr_las_trigger_handler, NULL);
+	ret = iio_triggered_buffer_setup(indio_dev,
+					 iio_pollfunc_store_time,
+					 bb_avr_las_trigger_handler,
+					 NULL);
 	if(ret < 0)
 		goto err_out;
 	ret = iio_device_register(indio_dev);
@@ -179,7 +152,7 @@ static struct platform_driver bb_avr_las_driver = {
 	.probe = bb_avr_las_probe,
 	.remove = bb_avr_las_remove,
 	.driver = {
-		.name = "bb-avr-las-actuator",
+		.name = "bb-avr-las-sens",
 		.of_match_table = bb_avr_las_of_match,
 	},
 };

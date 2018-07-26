@@ -23,7 +23,7 @@
 #include <linux/iio/triggered_buffer.h>
 
 static const struct of_device_id bb_avr_dds_of_match[] = {
-	{ .compatible = "ulb,bb-avr-dds-actuator" },
+	{ .compatible = "ulb,bb-avr-dds-actr" },
 	{ /* sentinel */ }
 };
 
@@ -38,24 +38,7 @@ struct bb_avr_dds {
 	struct regulator *regulator;
 };
 
-static int bb_avr_dds_read_raw(struct iio_dev *indio_dev,
-                               struct iio_chan_spec const *chan,
-			       int *val, int *val2, long m)
-{
-	return -ENOSYS;
-}	
-
-
-static int bb_avr_dds_write_raw(struct iio_dev *indio_dev,
-				struct iio_chan_spec const *chan,
-				int val, int val2, long mask) {
-	return -ENOSYS;
-}
-
-static const struct iio_info bb_avr_dds_info = {
-	.read_raw = bb_avr_dds_read_raw,
-	.write_raw = bb_avr_dds_write_raw,
-};
+static const struct iio_info bb_avr_dds_info = {};
 
 static int bb_avr_dds_buffer_preenable(struct iio_dev *indio_dev)
 {
@@ -153,7 +136,7 @@ static int bb_avr_dds_probe(struct platform_device *pdev)
 	/* set the parent AVR device */
 	dds->avr = dev_get_drvdata(pdev->dev.parent);
 	/* get a reference to the actuator supply */
-	dds->regulator = devm_regulator_get(&pdev->dev, "actuator");
+	dds->regulator = devm_regulator_get(&pdev->dev, "vdd");
 	if (IS_ERR(dds->regulator)) {
 		ret = PTR_ERR(dds->regulator);
 		if (ret != -EPROBE_DEFER)
@@ -167,7 +150,7 @@ static int bb_avr_dds_probe(struct platform_device *pdev)
 	}
 	/* set up the indio_dev struct */
 	dev_set_drvdata(&pdev->dev, indio_dev);
-	indio_dev->name = "dds-actuator";
+	indio_dev->name = "dds-actr";
 	indio_dev->dev.parent = &pdev->dev;
 	indio_dev->info = &bb_avr_dds_info;
 	indio_dev->modes = INDIO_DIRECT_MODE;
@@ -199,7 +182,7 @@ static struct platform_driver bb_avr_dds_driver = {
 	.probe = bb_avr_dds_probe,
 	.remove = bb_avr_dds_remove,
 	.driver = {
-		.name = "bb-avr-dds-actuator",
+		.name = "bb-avr-dds-actr",
 		.of_match_table = bb_avr_dds_of_match,
 	},
 };
