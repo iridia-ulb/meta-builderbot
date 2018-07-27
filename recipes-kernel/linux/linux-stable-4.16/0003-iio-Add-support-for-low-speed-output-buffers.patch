@@ -1,19 +1,20 @@
-From 06a7a4b95c99a9aa0825f1605fee0c179f7b337e Mon Sep 17 00:00:00 2001
+From 91bfa5f94754ea34bcb978245f1f7d80406ab294 Mon Sep 17 00:00:00 2001
 From: Michael Allwright <allsey87@gmail.com>
-Date: Thu, 5 Jul 2018 17:00:33 +0200
-Subject: [PATCH 1/1] iio: Add support for low-speed output buffers
+Date: Fri, 27 Jul 2018 15:55:26 +0200
+Subject: [PATCH] iio: Add support for low speed output buffers
 
 ---
- drivers/iio/buffer/kfifo_buf.c    | 50 +++++++++++++++++++++++++++++++++++++++
- drivers/iio/iio_core.h            |  3 +++
- drivers/iio/industrialio-buffer.c | 46 +++++++++++++++++++++++++++++++++++
+ drivers/iio/buffer/kfifo_buf.c    | 50 +++++++++++++++++++++++++++++++++
+ drivers/iio/iio_core.h            |  3 ++
+ drivers/iio/industrialio-buffer.c | 59 +++++++++++++++++++++++++++++++++++++--
  drivers/iio/industrialio-core.c   |  1 +
  include/linux/iio/buffer.h        |  2 ++
- include/linux/iio/buffer_impl.h   |  4 ++++
- 6 files changed, 106 insertions(+)
+ include/linux/iio/buffer_impl.h   |  4 +++
+ include/linux/iio/iio.h           |  6 ++++
+ 7 files changed, 123 insertions(+), 2 deletions(-)
 
 diff --git a/drivers/iio/buffer/kfifo_buf.c b/drivers/iio/buffer/kfifo_buf.c
-index 047fe757ab97..8e8fe7033153 100644
+index 047fe75..8e8fe70 100644
 --- a/drivers/iio/buffer/kfifo_buf.c
 +++ b/drivers/iio/buffer/kfifo_buf.c
 @@ -90,6 +90,23 @@ static int iio_store_to_kfifo(struct iio_buffer *r,
@@ -85,7 +86,7 @@ index 047fe757ab97..8e8fe7033153 100644
  	.set_bytes_per_datum = &iio_set_bytes_per_datum_kfifo,
  	.set_length = &iio_set_length_kfifo,
 diff --git a/drivers/iio/iio_core.h b/drivers/iio/iio_core.h
-index c775fedbcaf6..e84b05acc91d 100644
+index c775fed..e84b05a 100644
 --- a/drivers/iio/iio_core.h
 +++ b/drivers/iio/iio_core.h
 @@ -47,6 +47,8 @@ __poll_t iio_buffer_poll(struct file *filp,
@@ -106,7 +107,7 @@ index c775fedbcaf6..e84b05acc91d 100644
  static inline int iio_buffer_alloc_sysfs_and_mask(struct iio_dev *indio_dev)
  {
 diff --git a/drivers/iio/industrialio-buffer.c b/drivers/iio/industrialio-buffer.c
-index cd5bfe39591b..a028c753cb2b 100644
+index cd5bfe3..6634223 100644
 --- a/drivers/iio/industrialio-buffer.c
 +++ b/drivers/iio/industrialio-buffer.c
 @@ -90,6 +90,12 @@ static bool iio_buffer_ready(struct iio_dev *indio_dev, struct iio_buffer *buf,
@@ -169,8 +170,28 @@ index cd5bfe39591b..a028c753cb2b 100644
  /**
   * iio_buffer_poll() - poll the buffer to find out if it has data
   * @filp:	File structure pointer for device access
+@@ -179,8 +225,17 @@ __poll_t iio_buffer_poll(struct file *filp,
+ 		return 0;
+ 
+ 	poll_wait(filp, &rb->pollq, wait);
+-	if (iio_buffer_ready(indio_dev, rb, rb->watermark, 0))
+-		return EPOLLIN | EPOLLRDNORM;
++
++	switch (indio_dev->direction) {
++	case IIO_DEVICE_DIRECTION_IN:
++		if (iio_buffer_ready(indio_dev, rb, rb->watermark, 0))
++			return POLLIN | POLLRDNORM;
++		break;
++	case IIO_DEVICE_DIRECTION_OUT:
++		if (iio_buffer_space_available(rb))
++			return POLLOUT | POLLWRNORM;
++	}
++
+ 	return 0;
+ }
+ 
 diff --git a/drivers/iio/industrialio-core.c b/drivers/iio/industrialio-core.c
-index 19bdf3d2962a..f9922bf214d6 100644
+index 19bdf3d..f9922bf 100644
 --- a/drivers/iio/industrialio-core.c
 +++ b/drivers/iio/industrialio-core.c
 @@ -1629,6 +1629,7 @@ static long iio_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
@@ -182,7 +203,7 @@ index 19bdf3d2962a..f9922bf214d6 100644
  	.open = iio_chrdev_open,
  	.poll = iio_buffer_poll_addr,
 diff --git a/include/linux/iio/buffer.h b/include/linux/iio/buffer.h
-index 48767c776119..d74e75fb23a4 100644
+index 48767c7..d74e75f 100644
 --- a/include/linux/iio/buffer.h
 +++ b/include/linux/iio/buffer.h
 @@ -44,6 +44,8 @@ static inline int iio_push_to_buffers_with_timestamp(struct iio_dev *indio_dev,
@@ -195,7 +216,7 @@ index 48767c776119..d74e75fb23a4 100644
  				   const unsigned long *mask);
  
 diff --git a/include/linux/iio/buffer_impl.h b/include/linux/iio/buffer_impl.h
-index b9e22b7e2f28..33835fdb7e48 100644
+index b9e22b7..33835fd 100644
 --- a/include/linux/iio/buffer_impl.h
 +++ b/include/linux/iio/buffer_impl.h
 @@ -50,6 +50,10 @@ struct iio_buffer_access_funcs {
@@ -209,6 +230,30 @@ index b9e22b7e2f28..33835fdb7e48 100644
  	int (*request_update)(struct iio_buffer *buffer);
  
  	int (*set_bytes_per_datum)(struct iio_buffer *buffer, size_t bpd);
+diff --git a/include/linux/iio/iio.h b/include/linux/iio/iio.h
+index 11579fd..da263d4 100644
+--- a/include/linux/iio/iio.h
++++ b/include/linux/iio/iio.h
+@@ -318,6 +318,11 @@ static inline bool iio_channel_has_available(const struct iio_chan_spec *chan,
+ s64 iio_get_time_ns(const struct iio_dev *indio_dev);
+ unsigned int iio_get_time_res(const struct iio_dev *indio_dev);
+ 
++enum iio_device_direction {
++	IIO_DEVICE_DIRECTION_IN,
++	IIO_DEVICE_DIRECTION_OUT,
++};
++
+ /* Device operating modes */
+ #define INDIO_DIRECT_MODE		0x01
+ #define INDIO_BUFFER_TRIGGERED		0x02
+@@ -535,6 +540,7 @@ struct iio_dev {
+ 
+ 	struct iio_event_interface	*event_interface;
+ 
++	enum iio_device_direction	direction;
+ 	struct iio_buffer		*buffer;
+ 	struct list_head		buffer_list;
+ 	int				scan_bytes;
 -- 
-2.11.0
+2.7.4
 

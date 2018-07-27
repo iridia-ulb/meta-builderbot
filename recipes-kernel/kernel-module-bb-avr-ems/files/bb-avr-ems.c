@@ -149,6 +149,7 @@ static int bb_avr_ems_probe(struct platform_device *pdev)
 	indio_dev->name = "ems";
 	indio_dev->dev.parent = &pdev->dev;
 	indio_dev->info = &bb_avr_ems_info;
+	indio_dev->direction = IIO_DEVICE_DIRECTION_IN;
 	indio_dev->modes = INDIO_BUFFER_SOFTWARE;
 	indio_dev->channels = bb_avr_ems_channels;
 	indio_dev->num_channels = ARRAY_SIZE(bb_avr_ems_channels);

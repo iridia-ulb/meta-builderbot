@@ -153,7 +153,8 @@ static int bb_avr_dds_probe(struct platform_device *pdev)
 	indio_dev->name = "dds-actr";
 	indio_dev->dev.parent = &pdev->dev;
 	indio_dev->info = &bb_avr_dds_info;
-	indio_dev->modes = INDIO_DIRECT_MODE;
+	indio_dev->direction = IIO_DEVICE_DIRECTION_OUT;
+	indio_dev->modes = INDIO_BUFFER_SOFTWARE;
 	indio_dev->channels = bb_avr_dds_channels;
 	indio_dev->num_channels = ARRAY_SIZE(bb_avr_dds_channels);
 	indio_dev->available_scan_masks = bb_avr_dds_scan_masks;
