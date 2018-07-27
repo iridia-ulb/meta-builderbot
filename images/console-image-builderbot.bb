@@ -66,12 +66,17 @@ set_local_timezone() {
     ln -sf /usr/share/zoneinfo/Europe/Brussels ${IMAGE_ROOTFS}/etc/localtime
 }
 
+set_motd() {
+    printf "\nDo you want ants!? Because that's how you get ants!\n" > ${IMAGE_ROOTFS}/etc/motd
+}
+
 disable_bootlogd() {
     echo BOOTLOGD_ENABLE=no > ${IMAGE_ROOTFS}/etc/default/bootlogd
 }
 
 ROOTFS_POSTPROCESS_COMMAND += " \
     set_local_timezone ; \
+    set_motd ; \
     disable_bootlogd ; \
  "
 
