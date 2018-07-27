@@ -15,6 +15,8 @@ DEPENDS = "flex-native bison-native avahi libaio libusb1 libxml2"
 
 inherit cmake pythonnative
 
+EXTRA_OECMAKE += "-DLOG_LEVEL=Error"
+
 PACKAGES =+ "${PN}-iiod ${PN}-tests ${PN}-python"
 
 RDEPENDS_${PN}-python = "${PN} python-ctypes python-stringold"
