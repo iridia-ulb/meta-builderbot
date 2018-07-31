@@ -51,9 +51,11 @@ static void bb_avr_poweroff_do_poweroff(void)
 	BUG_ON(!avr);
 	/* Power down the actuator supply */
 	bb_avr_exec(avr, BB_AVR_CMD_SET_ACTUATOR_POWER_ENABLE, &enable, 1, NULL, 0);
-	mdelay(250);
+	usleep_range(2500, 10000);
 	/* Power down the system supply */
 	bb_avr_exec(avr, BB_AVR_CMD_SET_SYSTEM_POWER_ENABLE, &enable, 1, NULL, 0);
+	/* Sleep while the power disappears */
+	usleep_range(2500, 10000);
 }
 
 static int bb_avr_poweroff_probe(struct platform_device *pdev)
