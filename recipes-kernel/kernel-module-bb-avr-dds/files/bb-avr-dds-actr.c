@@ -110,8 +110,9 @@ static irqreturn_t bb_avr_dds_trigger_handler(int irq, void *p)
 	ret = iio_buffer_remove_sample(buffer, tx_data);
 
 	if (ret < 0) {
-		dev_err(&indio_dev->dev,
-			"iio_buffer_remove_sample failed: %d", ret);
+		if(ret != -ENODATA)
+			dev_err(&indio_dev->dev,
+				"iio_buffer_remove_sample failed: %d", ret);
 		goto out;
 	}
 

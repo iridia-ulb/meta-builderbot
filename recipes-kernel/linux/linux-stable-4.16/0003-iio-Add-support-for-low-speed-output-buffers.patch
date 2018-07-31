@@ -27,7 +27,7 @@ index 047fe75..8e8fe70 100644
 +	struct iio_kfifo *kf = iio_to_kfifo(r);
 +
 +	if (kfifo_len(&kf->kf) < 1)
-+		return -EBUSY;
++		return -ENODATA;
 +
 +	ret = kfifo_out(&kf->kf, data, 1);
 +	if (ret != 1)
