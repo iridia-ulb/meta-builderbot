@@ -36,7 +36,7 @@ struct bb_avr_ems {
 };
 
 static const char * const bb_avr_ems_discharge_mode[] = {
-	"constructive", "destructive", "disable",
+	"constructive", "destructive", "disabled",
 };
 
 static int bb_avr_ems_set_discharge_mode(struct iio_dev *indio_dev,
@@ -146,7 +146,7 @@ static int bb_avr_ems_probe(struct platform_device *pdev)
 
 	/* set up the indio_dev struct */
 	dev_set_drvdata(&pdev->dev, indio_dev);
-	indio_dev->name = "ems";
+	indio_dev->name = "ems-sens";
 	indio_dev->dev.parent = &pdev->dev;
 	indio_dev->info = &bb_avr_ems_info;
 	indio_dev->direction = IIO_DEVICE_DIRECTION_IN;
