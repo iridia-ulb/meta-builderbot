@@ -37,41 +37,11 @@ struct bb_avr_las {
 
 static const struct iio_info bb_avr_las_info = {};
 
-static const char * const bb_avr_las_state[] = {
-	"inactive", "position_control", "speed_control",
-	"cal_srch_top", "cal_srch_btm"
-};
-
-static int bb_avr_las_get_state(struct iio_dev *indio_dev,
-				const struct iio_chan_spec *chan)
-{
-	struct bb_avr_las *las = iio_priv(indio_dev);
-	u8 rx_data;
-
-	bb_avr_exec(las->avr, BB_AVR_CMD_GET_LIFT_ACTUATOR_STATE,
-		    NULL, 0, &rx_data, 1);
-
-	return rx_data;
-}
-
-struct iio_enum bb_avr_las_state_enum = {
-	.items = bb_avr_las_state,
-	.num_items = ARRAY_SIZE(bb_avr_las_state),
-	.get = bb_avr_las_get_state,
-};
-
-static const struct iio_chan_spec_ext_info bb_avr_las_ext_info[] = {
-	IIO_ENUM("state", IIO_SHARED_BY_ALL, &bb_avr_las_state_enum),
-	{ /* sentinel */ },
-};
-
-
 static const struct iio_chan_spec bb_avr_las_channels[] = {
 	{
 		.type = IIO_DISTANCE,
 		.indexed = true,
 		.channel = 0,
-		.ext_info = bb_avr_las_ext_info,
 		.scan_index = 0,
 		.scan_type = {
 			.sign = 'u',
@@ -80,10 +50,46 @@ static const struct iio_chan_spec bb_avr_las_channels[] = {
 			.endianness = IIO_BE,
 		},
 	},
-	IIO_CHAN_SOFT_TIMESTAMP(1),
+	{
+		.type = IIO_PROXIMITY,
+		.indexed = true,
+		.channel = 1,
+		.scan_index = 1,
+		.scan_type = {
+			.sign = 'u',
+			.realbits = 1,
+			.storagebits = 8,
+			.endianness = IIO_BE,
+		},
+	},
+	{
+		.type = IIO_PROXIMITY,
+		.indexed = true,
+		.channel = 2,
+		.scan_index = 2,
+		.scan_type = {
+			.sign = 'u',
+			.realbits = 1,
+			.storagebits = 8,
+			.endianness = IIO_BE,
+		},
+	},
+	{
+		.type = IIO_INDEX,
+		.indexed = true,
+		.channel = 3,
+		.scan_index = 3,
+		.scan_type = {
+			.sign = 'u',
+			.realbits = 3,
+			.storagebits = 8,
+			.endianness = IIO_BE,
+		},
+	},
+	IIO_CHAN_SOFT_TIMESTAMP(4),
 };
 
-static const unsigned long bb_avr_las_scan_masks[] = {0x1, 0};
+static const unsigned long bb_avr_las_scan_masks[] = {0xf, 0};
 
 static irqreturn_t bb_avr_las_trigger_handler(int irq, void *p)
 {
@@ -91,13 +97,19 @@ static irqreturn_t bb_avr_las_trigger_handler(int irq, void *p)
 	struct iio_dev *indio_dev = pf->indio_dev;
 	struct bb_avr_las *las = iio_priv(indio_dev);
 	int ret = 0;
-	u8 position;
+	u8 rx_data[4];
 
+	/* pull in remote data */
 	ret = bb_avr_exec(las->avr, BB_AVR_CMD_GET_LIFT_ACTUATOR_POSITION,
-			  NULL, 0, &position, 1);
+			  NULL, 0, rx_data, 1);
+	ret = bb_avr_exec(las->avr, BB_AVR_CMD_GET_LIMIT_SWITCH_STATE,
+			  NULL, 0, rx_data + 1, 2);
+	ret = bb_avr_exec(las->avr, BB_AVR_CMD_GET_LIFT_ACTUATOR_STATE,
+			  NULL, 0, rx_data + 3, 1);
+
 	if (ret < 0)
 		goto out;
-	iio_push_to_buffers_with_timestamp(indio_dev, &position,
+	iio_push_to_buffers_with_timestamp(indio_dev, &rx_data,
 					   iio_get_time_ns(indio_dev));
 out:
 	iio_trigger_notify_done(indio_dev->trig);
