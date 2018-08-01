@@ -74,7 +74,7 @@ static const struct iio_chan_spec_ext_info bb_avr_las_ext_info[] = {
 static const struct iio_chan_spec bb_avr_las_channels[] = {
   {
 		.type = IIO_DISTANCE,
-		.indexed = false,
+		.indexed = true,
 		.channel = 0,
 		.output = true,
 		.ext_info = bb_avr_las_ext_info,
@@ -103,8 +103,9 @@ static irqreturn_t bb_avr_las_trigger_handler(int irq, void *p)
 	ret = iio_buffer_remove_sample(buffer, &position);
 
 	if (ret < 0) {
-		dev_err(&indio_dev->dev,
-			"iio_buffer_remove_sample failed: %d", ret);
+		if(ret != -ENODATA)
+			dev_err(&indio_dev->dev,
+				"iio_buffer_remove_sample failed: %d", ret);
 		goto out;
 	}
 

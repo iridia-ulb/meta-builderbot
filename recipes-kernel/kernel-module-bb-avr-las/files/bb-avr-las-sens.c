@@ -53,7 +53,7 @@ static const struct iio_chan_spec bb_avr_las_channels[] = {
 	{
 		.type = IIO_PROXIMITY,
 		.indexed = true,
-		.channel = 1,
+		.channel = 0,
 		.scan_index = 1,
 		.scan_type = {
 			.sign = 'u',
@@ -65,7 +65,7 @@ static const struct iio_chan_spec bb_avr_las_channels[] = {
 	{
 		.type = IIO_PROXIMITY,
 		.indexed = true,
-		.channel = 2,
+		.channel = 1,
 		.scan_index = 2,
 		.scan_type = {
 			.sign = 'u',
@@ -77,7 +77,7 @@ static const struct iio_chan_spec bb_avr_las_channels[] = {
 	{
 		.type = IIO_INDEX,
 		.indexed = true,
-		.channel = 3,
+		.channel = 0,
 		.scan_index = 3,
 		.scan_type = {
 			.sign = 'u',
@@ -102,14 +102,17 @@ static irqreturn_t bb_avr_las_trigger_handler(int irq, void *p)
 	/* pull in remote data */
 	ret = bb_avr_exec(las->avr, BB_AVR_CMD_GET_LIFT_ACTUATOR_POSITION,
 			  NULL, 0, rx_data, 1);
-	ret = bb_avr_exec(las->avr, BB_AVR_CMD_GET_LIMIT_SWITCH_STATE,
-			  NULL, 0, rx_data + 1, 2);
-	ret = bb_avr_exec(las->avr, BB_AVR_CMD_GET_LIFT_ACTUATOR_STATE,
-			  NULL, 0, rx_data + 3, 1);
-
 	if (ret < 0)
 		goto out;
-	iio_push_to_buffers_with_timestamp(indio_dev, &rx_data,
+	ret = bb_avr_exec(las->avr, BB_AVR_CMD_GET_LIMIT_SWITCH_STATE,
+			  NULL, 0, rx_data + 1, 2);
+	if (ret < 0)
+		goto out;
+	ret = bb_avr_exec(las->avr, BB_AVR_CMD_GET_LIFT_ACTUATOR_STATE,
+			  NULL, 0, rx_data + 3, 1);
+	if (ret < 0)
+		goto out;
+	iio_push_to_buffers_with_timestamp(indio_dev, rx_data,
 					   iio_get_time_ns(indio_dev));
 out:
 	iio_trigger_notify_done(indio_dev->trig);
