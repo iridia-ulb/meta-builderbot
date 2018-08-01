@@ -22,7 +22,7 @@
 #include <linux/iio/triggered_buffer.h>
 
 static const struct of_device_id bb_avr_ems_of_match[] = {
-	{ .compatible = "ulb,bb-avr-ems" },
+	{ .compatible = "ulb,bb-avr-ems-sens" },
 	{ /* sentinel */ }
 };
 
@@ -34,61 +34,6 @@ static const struct of_device_id bb_avr_ems_of_match[] = {
 struct bb_avr_ems {
 	struct bb_avr *avr;
 };
-
-static const char * const bb_avr_ems_discharge_mode[] = {
-	"constructive", "destructive", "disabled",
-};
-
-static int bb_avr_ems_set_discharge_mode(struct iio_dev *indio_dev,
-					 const struct iio_chan_spec *chan,
-					 unsigned int mode)
-{
-	struct bb_avr_ems *ems = iio_priv(indio_dev);
-
-	u8 tx_data = mode;
-
-	return bb_avr_exec(ems->avr, BB_AVR_CMD_SET_EM_DISCHARGE_MODE,
-			   &tx_data, 1, NULL, 0);
-}
-
-struct iio_enum bb_avr_ems_discharge_mode_enum = {
-	.items = bb_avr_ems_discharge_mode,
-	.num_items = ARRAY_SIZE(bb_avr_ems_discharge_mode),
-	.set = bb_avr_ems_set_discharge_mode,
-};
-
-static const struct iio_chan_spec_ext_info bb_avr_ems_ext_info[] = {
-	IIO_ENUM("discharge_mode", IIO_SHARED_BY_ALL, &bb_avr_ems_discharge_mode_enum),
-	{ /* sentinel */ },
-};
-
-static int bb_avr_ems_buffer_preenable(struct iio_dev *indio_dev)
-{
-	struct bb_avr_ems *ems = iio_priv(indio_dev);
-
-	u8 enable = 1;
-
-	return bb_avr_exec(ems->avr, BB_AVR_CMD_SET_EM_CHARGE_MODE,
-			   &enable, 1, NULL, 0);
-}
-
-static int bb_avr_ems_buffer_postdisable(struct iio_dev *indio_dev)
-{
-	struct bb_avr_ems *ems = iio_priv(indio_dev);
-
-	u8 enable = 0;
-
-	return bb_avr_exec(ems->avr, BB_AVR_CMD_SET_EM_CHARGE_MODE,
-			   &enable, 1, NULL, 0);
-}
-
-static const struct iio_buffer_setup_ops bb_avr_ems_buffer_setup_ops = {
-	.preenable   = bb_avr_ems_buffer_preenable,
-	.postenable  = iio_triggered_buffer_postenable,
-	.predisable  = iio_triggered_buffer_predisable,
-	.postdisable = bb_avr_ems_buffer_postdisable,
-};
-
 
 static irqreturn_t bb_avr_ems_trigger_handler(int irq, void *p)
 {
@@ -113,9 +58,8 @@ out:
 static const struct iio_chan_spec bb_avr_ems_channels[] = {
 	{
 		.type = IIO_VOLTAGE,
-		.indexed = false,
+		.indexed = true,
 		.channel = 0,
-		.ext_info = bb_avr_ems_ext_info,
 		.scan_index = 0,
 		.scan_type = {
 			.sign = 'u',
@@ -158,7 +102,7 @@ static int bb_avr_ems_probe(struct platform_device *pdev)
 	ret = iio_triggered_buffer_setup(indio_dev,
 					 iio_pollfunc_store_time,
 					 bb_avr_ems_trigger_handler,
-					 &bb_avr_ems_buffer_setup_ops);
+					 NULL);
 	if(ret < 0)
 		goto err_out;
 	ret = iio_device_register(indio_dev);
@@ -180,7 +124,7 @@ static struct platform_driver bb_avr_ems_driver = {
 	.probe = bb_avr_ems_probe,
 	.remove = bb_avr_ems_remove,
 	.driver = {
-		.name = "bb-avr-ems",
+		.name = "bb-avr-ems-sens",
 		.of_match_table = bb_avr_ems_of_match,
 	},
 };
@@ -190,5 +134,4 @@ module_platform_driver(bb_avr_ems_driver);
 MODULE_DEVICE_TABLE(of, bb_avr_ems_of_match);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Michael Allwright <allsey87@gmail.com>");
-MODULE_DESCRIPTION("BuilderBot AVR Electromagnet System");
-//MODULE_ALIAS("platform:bb-avr-ems");
+MODULE_DESCRIPTION("BuilderBot AVR Electromagnet System Sensor");

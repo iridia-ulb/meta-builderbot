@@ -227,8 +227,12 @@
 			compatible = "ulb,bb-avr-las-sens";
 		};
 
-		ems {
-			compatible = "ulb,bb-avr-ems";
+		ems_actr {
+			compatible = "ulb,bb-avr-ems-actr";
+		};
+
+		ems_sens {
+			compatible = "ulb,bb-avr-ems-sens";
 		};
 
 		nfc {

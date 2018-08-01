@@ -1,4 +1,4 @@
-obj-m := bb-avr-ems.o
+obj-m := bb-avr-ems-actr.o bb-avr-ems-sens.o
 
 SRC := $(shell pwd)
 

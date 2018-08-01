@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0+
 
 /*
- * Lift actuator system actuator driver for the BuilderBot
+ * Lift system actuator driver for the BuilderBot
  *
  * Copyright (C) 2018 Michael Allwright
  */
@@ -27,7 +27,7 @@ static const struct of_device_id bb_avr_las_of_match[] = {
 };
 
 /**
- * struct bb_avr_las - Lift actuator system actuator
+ * struct bb_avr_las - Lift system actuator
  *
  * @avr: Pointer to parent BuilderBot AVR device
  */
@@ -72,7 +72,7 @@ static const struct iio_chan_spec_ext_info bb_avr_las_ext_info[] = {
 };
 
 static const struct iio_chan_spec bb_avr_las_channels[] = {
-  {
+{
 		.type = IIO_DISTANCE,
 		.indexed = true,
 		.channel = 0,
@@ -117,7 +117,6 @@ out:
 }
 
 
-
 static int bb_avr_las_probe(struct platform_device *pdev)
 {
 	struct iio_dev *indio_dev;
@@ -140,7 +139,8 @@ static int bb_avr_las_probe(struct platform_device *pdev)
 	indio_dev->modes = INDIO_BUFFER_SOFTWARE;
 	indio_dev->channels = bb_avr_las_channels;
 	indio_dev->num_channels = ARRAY_SIZE(bb_avr_las_channels);
-	
+	indio_dev->available_scan_masks = bb_avr_las_scan_masks;
+
 	ret = iio_triggered_buffer_setup(indio_dev, NULL,
 					 bb_avr_las_trigger_handler, NULL);
 	if(ret < 0)
@@ -174,4 +174,4 @@ module_platform_driver(bb_avr_las_driver);
 MODULE_DEVICE_TABLE(of, bb_avr_las_of_match);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Michael Allwright <allsey87@gmail.com>");
-MODULE_DESCRIPTION("BuilderBot AVR Differential Drive System");
+MODULE_DESCRIPTION("BuilderBot AVR Lift System Actuator");
