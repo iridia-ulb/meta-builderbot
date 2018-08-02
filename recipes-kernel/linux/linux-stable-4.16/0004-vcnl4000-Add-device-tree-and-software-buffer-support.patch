@@ -1,12 +1,12 @@
-From 95461c285b084ec5fb88935fbbd2d73fb088633b Mon Sep 17 00:00:00 2001
+From e185a261d4fffe81e9d75882217f13d622ae21b7 Mon Sep 17 00:00:00 2001
 From: Michael Allwright <allsey87@gmail.com>
-Date: Thu, 2 Aug 2018 15:30:05 +0200
+Date: Thu, 2 Aug 2018 17:25:00 +0200
 Subject: [PATCH] vcnl4000: Add device tree and software buffer support
 
 ---
  drivers/iio/light/Kconfig    |   2 +
- drivers/iio/light/vcnl4000.c | 229 +++++++++++++++++++++++++++++++++++--------
- 2 files changed, 188 insertions(+), 43 deletions(-)
+ drivers/iio/light/vcnl4000.c | 232 +++++++++++++++++++++++++++++++++++--------
+ 2 files changed, 191 insertions(+), 43 deletions(-)
 
 diff --git a/drivers/iio/light/Kconfig b/drivers/iio/light/Kconfig
 index 93fd421..8763f25 100644
@@ -22,7 +22,7 @@ index 93fd421..8763f25 100644
  	help
  	 Say Y here if you want to build a driver for the Vishay VCNL4000,
 diff --git a/drivers/iio/light/vcnl4000.c b/drivers/iio/light/vcnl4000.c
-index c599a90..777f8aa 100644
+index c599a90..c55b5e5 100644
 --- a/drivers/iio/light/vcnl4000.c
 +++ b/drivers/iio/light/vcnl4000.c
 @@ -21,9 +21,12 @@
@@ -267,7 +267,7 @@ index c599a90..777f8aa 100644
  static const struct iio_info vcnl4000_info = {
  	.read_raw = vcnl4000_read_raw,
  };
-@@ -171,35 +255,94 @@ static int vcnl4000_probe(struct i2c_client *client,
+@@ -171,35 +255,97 @@ static int vcnl4000_probe(struct i2c_client *client,
  	data = iio_priv(indio_dev);
  	i2c_set_clientdata(client, indio_dev);
  	data->client = client;
@@ -279,14 +279,17 @@ index c599a90..777f8aa 100644
 +		return ret;
 +	}
 +
-+	data->regulator = devm_regulator_get_optional(&client->dev, "vdd");
-+	if (!IS_ERR(data->regulator)) {
-+		ret = regulator_enable(data->regulator);
-+		if(ret) {
-+			dev_err(&client->dev, "Failed to enable regulator: %d", ret);
-+			goto out_disable_regulator;
-+		}
++	data->regulator = devm_regulator_get(&client->dev, "vdd");
++
++	if(IS_ERR(data->regulator))
++		return -EPROBE_DEFER;
++
++	ret = regulator_enable(data->regulator);
++	if(ret) {
++		dev_err(&client->dev, "Failed to enable regulator: %d", ret);
++		return ret;
 +	}
++	msleep(500);
 +
  	mutex_init(&data->lock);
  
