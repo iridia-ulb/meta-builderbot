@@ -145,6 +145,184 @@
 		};
 
 	};
+
+	rf_pca_0: pca9545@70 {
+		compatible = "nxp,pca9545";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x70>;
+		i2c-mux-idle-disconnect;
+
+		i2c@0 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0>;
+
+			vcnl4010@13 {
+				compatible = "vishay,vcnl4010";
+				label = "1";
+				reg = <0x13>;
+				vdd-supply = <&actr_power>;
+			};
+		};
+
+		i2c@1 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <1>;
+
+			vcnl4010@13 {
+				compatible = "vishay,vcnl4010";
+				label = "2";
+				reg = <0x13>;
+				vdd-supply = <&actr_power>;
+			};
+		};
+
+		i2c@2 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <2>;
+
+			vcnl4010@13 {
+				compatible = "vishay,vcnl4010";
+				label = "3";
+				reg = <0x13>;
+				vdd-supply = <&actr_power>;
+			};
+		};
+
+		i2c@3 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <3>;
+
+			vcnl4010@13 {
+				compatible = "vishay,vcnl4010";
+				label = "4";
+				reg = <0x13>;
+				vdd-supply = <&actr_power>;
+			};
+		};
+	};
+	rf_pca_1: pca9545@71 {
+		compatible = "nxp,pca9545";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x71>;
+		i2c-mux-idle-disconnect;
+
+		i2c@0 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0>;
+
+			vcnl4010@13 {
+				compatible = "vishay,vcnl4010";
+				label = "5";
+				reg = <0x13>;
+				vdd-supply = <&actr_power>;
+			};
+		};
+
+		i2c@1 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <1>;
+
+			vcnl4010@13 {
+				compatible = "vishay,vcnl4010";
+				label = "6";
+				reg = <0x13>;
+				vdd-supply = <&actr_power>;
+			};
+		};
+
+		i2c@2 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <2>;
+
+			vcnl4010@13 {
+				compatible = "vishay,vcnl4010";
+				label = "7";
+				reg = <0x13>;
+				vdd-supply = <&actr_power>;
+			};
+		};
+
+		i2c@3 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <3>;
+
+			vcnl4010@13 {
+				compatible = "vishay,vcnl4010";
+				label = "8";
+				reg = <0x13>;
+				vdd-supply = <&actr_power>;
+			};
+		};
+	};
+	rf_pca_2: pca9545@72 {
+		compatible = "nxp,pca9545";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x72>;
+		i2c-mux-idle-disconnect;
+
+		i2c@0 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0>;
+
+			vcnl4010@13 {
+				compatible = "vishay,vcnl4010";
+				label = "9";
+				reg = <0x13>;
+				vdd-supply = <&actr_power>;
+			};
+		};
+
+		i2c@1 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <1>;
+
+			vcnl4010@13 {
+				compatible = "vishay,vcnl4010";
+				label = "10";
+				reg = <0x13>;
+				vdd-supply = <&actr_power>;
+			};
+		};
+
+		i2c@2 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <2>;
+
+			vcnl4010@13 {
+				compatible = "vishay,vcnl4010";
+				label = "11";
+				reg = <0x13>;
+				vdd-supply = <&actr_power>;
+			};
+		};
+
+		i2c@3 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <3>;
+
+			vcnl4010@13 {
+				compatible = "vishay,vcnl4010";
+				label = "12";
+				reg = <0x13>;
+				vdd-supply = <&actr_power>;
+			};
+		};
+	};
 };
 
 &i2c3 {
