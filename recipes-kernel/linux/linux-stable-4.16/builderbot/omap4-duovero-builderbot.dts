@@ -409,7 +409,7 @@
 				status = "ok";
 				reg = <0x3c>;
 
-				dvdd-enable-gpios = <&ov5640_1_gpio 0 GPIO_ACTIVE_HIGH>; 
+				dvdd-enable-gpios = <&ov5640_1_gpio 0 GPIO_ACTIVE_HIGH>;
 				avdd-enable-gpios = <&ov5640_1_gpio 1 GPIO_ACTIVE_HIGH>;
 				clock-enable-gpios = <&ov5640_1_gpio 4 GPIO_ACTIVE_HIGH>;
 
