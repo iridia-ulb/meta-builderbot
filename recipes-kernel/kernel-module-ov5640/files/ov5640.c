@@ -175,7 +175,8 @@ static const struct ov5640_reg configscript_common1[] = {
 	{ 0x3612, 0x4b },
 	{ 0x3618, 0x04 },
 	{ 0x3034, 0x18 },
-	{ 0x3035, 0x11 },
+	{ 0x3035, 0x21 },
+	{ 0x4837, 0x2a },
 	{ 0x3036, 0x54 },
 	{ 0x3037, 0x13 },
 	{ 0x3708, 0x21 },
@@ -923,9 +924,6 @@ static int ov5640_registered(struct v4l2_subdev *subdev)
 	if (ret)
 		goto err;
 
-	if (ret)
-		goto err;
-
 	/* Init controls */
 	ret = v4l2_ctrl_handler_init(&ov5640->ctrls, 1);
 	if (ret)
@@ -1060,7 +1058,7 @@ static int ov5640_probe(struct i2c_client *i2c,
 	ov5640->clk_cfg.sc_pll_prediv = 3;
 	ov5640->clk_cfg.sc_pll_rdiv = 1;
 	ov5640->clk_cfg.sc_pll_mult = 84;
-	ov5640->clk_cfg.sysclk_div = 1;
+	ov5640->clk_cfg.sysclk_div = 2;
 	ov5640->clk_cfg.mipi_div = 1;
 
 	v4l2_i2c_subdev_init(&ov5640->subdev, i2c, &ov5640_subdev_ops);
