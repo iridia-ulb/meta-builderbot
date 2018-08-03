@@ -1028,16 +1028,6 @@ static int ov5640_probe(struct i2c_client *i2c,
 {
 	struct ov5640 *ov5640;
 	int ret;
-	const struct of_device_id *of_device_id = NULL;
-
-	if (i2c->dev.of_node) {
-		of_device_id = of_match_device(ov5640_dt_ids, &i2c->dev);
-	}
-
-	if (of_device_id == NULL) {
-		dev_err(&i2c->dev, "Device not found in device tree!\n");
-		return -ENODEV;
-	}
 
 	ov5640 = devm_kzalloc(&i2c->dev, sizeof(*ov5640), GFP_KERNEL);
 	if (!ov5640)

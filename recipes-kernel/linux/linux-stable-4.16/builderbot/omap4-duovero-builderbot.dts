@@ -405,7 +405,7 @@
 			};
 
 			ov5640_1: camera@3c {
-				compatible = "ovti,ov5640";
+				compatible = "omnivision,ov5640";
 				status = "ok";
 				reg = <0x3c>;
 
