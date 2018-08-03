@@ -24,6 +24,7 @@ SRC_URI = " \
     file://0005-sc16is7xx-Improve-stability-for-use-with-serdev.patch \
     file://0006-serdev-Add-support-for-multi-UART-devices.patch \
     file://0007-mfd-Add-support-for-the-BuilderBot-AVRs.patch \
+    file://0008-omap4iss-Fix-multiple-bugs-and-use-device-tree.patch \
     file://defconfig \
 "
 

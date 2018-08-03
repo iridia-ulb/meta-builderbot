@@ -1,0 +1,949 @@
+From a93e24bdba0c257c4855605c6e44fa984e634c58 Mon Sep 17 00:00:00 2001
+From: Michael Allwright <allsey87@gmail.com>
+Date: Fri, 3 Aug 2018 14:48:13 +0200
+Subject: [PATCH] omap4iss: Fix multiple bugs and use device tree
+
+---
+ arch/arm/boot/dts/omap4.dtsi                 |  28 ++-
+ drivers/staging/media/omap4iss/Kconfig       |   1 +
+ drivers/staging/media/omap4iss/iss.c         | 363 +++++++++++++++------------
+ drivers/staging/media/omap4iss/iss.h         |  20 +-
+ drivers/staging/media/omap4iss/iss_csi2.c    |   1 +
+ drivers/staging/media/omap4iss/iss_csiphy.c  |  15 +-
+ drivers/staging/media/omap4iss/iss_csiphy.h  |   2 +-
+ drivers/staging/media/omap4iss/iss_ipipe.c   |   1 +
+ drivers/staging/media/omap4iss/iss_ipipeif.c |   1 +
+ drivers/staging/media/omap4iss/iss_resizer.c |   1 +
+ drivers/staging/media/omap4iss/iss_video.c   |   7 -
+ drivers/staging/media/omap4iss/omap4iss.h    |  74 ++++++
+ include/linux/platform_data/media/omap4iss.h |  66 -----
+ 13 files changed, 329 insertions(+), 251 deletions(-)
+ create mode 100644 drivers/staging/media/omap4iss/omap4iss.h
+ delete mode 100644 include/linux/platform_data/media/omap4iss.h
+
+diff --git a/arch/arm/boot/dts/omap4.dtsi b/arch/arm/boot/dts/omap4.dtsi
+index 4759048..661e094 100644
+--- a/arch/arm/boot/dts/omap4.dtsi
++++ b/arch/arm/boot/dts/omap4.dtsi
+@@ -748,7 +748,6 @@
+ 
+ 		target-module@52000000 {
+ 			compatible = "ti,sysc-omap4", "ti,sysc";
+-			ti,hwmods = "iss";
+ 			reg = <0x52000000 0x4>,
+ 			      <0x52000010 0x4>;
+ 			reg-names = "rev", "sysc";
+@@ -762,13 +761,32 @@
+ 					<SYSC_IDLE_SMART>,
+ 					<SYSC_IDLE_SMART_WKUP>;
+ 			ti,sysc-delay-us = <2>;
+-			clocks = <&iss_clkctrl OMAP4_ISS_CLKCTRL 0>;
+-			clock-names = "fck";
++			clocks = <&iss_clkctrl OMAP4_ISS_CLKCTRL 0>,
++				 <&iss_clkctrl OMAP4_ISS_CLKCTRL 8>;
++			clock-names = "fck","ick";
+ 			#address-cells = <1>;
+ 			#size-cells = <1>;
+ 			ranges = <0 0x52000000 0x1000000>;
+-
+-			/* No child device binding, driver in staging */
++			iss: iss@0 {
++				compatible = "ti,omap4iss";
++				reg = <0x0000 0x200>, /* top */
++				      <0x1000 0x170>, /* csi2_a_regs1 */
++				      <0x1170 0x020>, /* camerarx_core1 */
++				      <0x1400 0x170>, /* csi2_b_regs1 */
++				      <0x1570 0x020>, /* camerarx_core2 */
++				      <0x2000 0x200>, /* bte */
++				      <0x10000 0x0a0>, /* isp_sys1 */
++				      <0x10400 0x400>, /* isp_resizer */
++				      <0x10800 0x800>, /* isp_ipipe */
++				      <0x11000 0x200>, /* isp_isif */
++				      <0x11200 0x080>; /* isp_ipipeif */
++				syscon = <&omap4_padconf_global>;
++				status = "ok";
++				ti,hwmods = "iss";
++				interrupts = <GIC_SPI 24 IRQ_TYPE_LEVEL_HIGH>;
++				dmas = <&sdma 9>, <&sdma 10>, <&sdma 12>, <&sdma 13>;
++				dma-names = "1", "2", "3", "4";
++			};
+ 		};
+ 
+ 		mmu_ipu: mmu@55082000 {
+diff --git a/drivers/staging/media/omap4iss/Kconfig b/drivers/staging/media/omap4iss/Kconfig
+index 4618346..80f7144 100644
+--- a/drivers/staging/media/omap4iss/Kconfig
++++ b/drivers/staging/media/omap4iss/Kconfig
+@@ -4,5 +4,6 @@ config VIDEO_OMAP4
+ 	depends on HAS_DMA
+ 	select MFD_SYSCON
+ 	select VIDEOBUF2_DMA_CONTIG
++	select V4L2_FWNODE
+ 	---help---
+ 	  Driver for an OMAP 4 ISS controller.
+diff --git a/drivers/staging/media/omap4iss/iss.c b/drivers/staging/media/omap4iss/iss.c
+index b1036ba..c508fd8 100644
+--- a/drivers/staging/media/omap4iss/iss.c
++++ b/drivers/staging/media/omap4iss/iss.c
+@@ -14,6 +14,7 @@
+ #include <linux/clk.h>
+ #include <linux/delay.h>
+ #include <linux/device.h>
++#include <linux/of_device.h>
+ #include <linux/dma-mapping.h>
+ #include <linux/i2c.h>
+ #include <linux/interrupt.h>
+@@ -25,9 +26,12 @@
+ #include <linux/vmalloc.h>
+ 
+ #include <media/v4l2-common.h>
++#include <media/v4l2-fwnode.h>
+ #include <media/v4l2-device.h>
+ #include <media/v4l2-ctrls.h>
+ 
++#include <linux/pm_runtime.h>
++
+ #include "iss.h"
+ #include "iss_regs.h"
+ 
+@@ -563,6 +567,8 @@ static int iss_reset(struct iss_device *iss)
+ 	iss_reg_set(iss, OMAP4_ISS_MEM_TOP, ISS_HL_SYSCONFIG,
+ 		    ISS_HL_SYSCONFIG_SOFTRESET);
+ 
++	msleep(50);
++
+ 	timeout = iss_poll_condition_timeout(
+ 		!(iss_reg_read(iss, OMAP4_ISS_MEM_TOP, ISS_HL_SYSCONFIG) &
+ 		ISS_HL_SYSCONFIG_SOFTRESET), 1000, 10, 100);
+@@ -792,56 +798,17 @@ void omap4iss_isp_subclk_disable(struct iss_device *iss,
+ 	__iss_isp_subclk_update(iss);
+ }
+ 
+-/*
+- * iss_enable_clocks - Enable ISS clocks
+- * @iss: OMAP4 ISS device
+- *
+- * Return 0 if successful, or clk_enable return value if any of tthem fails.
+- */
+-static int iss_enable_clocks(struct iss_device *iss)
++int omap4iss_runtime_suspend(struct device *dev)
+ {
+-	int ret;
+-
+-	ret = clk_enable(iss->iss_fck);
+-	if (ret) {
+-		dev_err(iss->dev, "clk_enable iss_fck failed\n");
+-		return ret;
+-	}
+-
+-	ret = clk_enable(iss->iss_ctrlclk);
+-	if (ret) {
+-		dev_err(iss->dev, "clk_enable iss_ctrlclk failed\n");
+-		clk_disable(iss->iss_fck);
+-		return ret;
+-	}
+-
++	struct iss_device *iss = (struct iss_device *)dev_get_drvdata(dev);
++	pm_qos_update_request(&iss->pm_qos, PM_QOS_MEMORY_BANDWIDTH_DEFAULT_VALUE);
+ 	return 0;
+ }
+ 
+-/*
+- * iss_disable_clocks - Disable ISS clocks
+- * @iss: OMAP4 ISS device
+- */
+-static void iss_disable_clocks(struct iss_device *iss)
+-{
+-	clk_disable(iss->iss_ctrlclk);
+-	clk_disable(iss->iss_fck);
+-}
+-
+-static int iss_get_clocks(struct iss_device *iss)
++int omap4iss_runtime_resume(struct device *dev)
+ {
+-	iss->iss_fck = devm_clk_get(iss->dev, "iss_fck");
+-	if (IS_ERR(iss->iss_fck)) {
+-		dev_err(iss->dev, "Unable to get iss_fck clock info\n");
+-		return PTR_ERR(iss->iss_fck);
+-	}
+-
+-	iss->iss_ctrlclk = devm_clk_get(iss->dev, "iss_ctrlclk");
+-	if (IS_ERR(iss->iss_ctrlclk)) {
+-		dev_err(iss->dev, "Unable to get iss_ctrlclk clock info\n");
+-		return PTR_ERR(iss->iss_ctrlclk);
+-	}
+-
++	struct iss_device *iss = (struct iss_device *)dev_get_drvdata(dev);
++	pm_qos_update_request(&iss->pm_qos, 800000);
+ 	return 0;
+ }
+ 
+@@ -866,10 +833,7 @@ struct iss_device *omap4iss_get(struct iss_device *iss)
+ 	if (iss->ref_count > 0)
+ 		goto out;
+ 
+-	if (iss_enable_clocks(iss) < 0) {
+-		__iss = NULL;
+-		goto out;
+-	}
++	pm_runtime_resume(iss->dev);
+ 
+ 	iss_enable_interrupts(iss);
+ 
+@@ -903,7 +867,7 @@ void omap4iss_put(struct iss_device *iss)
+ 		 */
+ 		if (!media_entity_enum_empty(&iss->crashed))
+ 			iss_reset(iss);
+-		iss_disable_clocks(iss);
++		pm_runtime_suspend(iss->dev);
+ 	}
+ 	mutex_unlock(&iss->iss_mutex);
+ }
+@@ -933,59 +897,8 @@ static void iss_unregister_entities(struct iss_device *iss)
+ 	media_device_unregister(&iss->media_dev);
+ }
+ 
+-/*
+- * iss_register_subdev_group - Register a group of subdevices
+- * @iss: OMAP4 ISS device
+- * @board_info: I2C subdevs board information array
+- *
+- * Register all I2C subdevices in the board_info array. The array must be
+- * terminated by a NULL entry, and the first entry must be the sensor.
+- *
+- * Return a pointer to the sensor media entity if it has been successfully
+- * registered, or NULL otherwise.
+- */
+-static struct v4l2_subdev *
+-iss_register_subdev_group(struct iss_device *iss,
+-			  struct iss_subdev_i2c_board_info *board_info)
+-{
+-	struct v4l2_subdev *sensor = NULL;
+-	unsigned int first;
+-
+-	if (!board_info->board_info)
+-		return NULL;
+-
+-	for (first = 1; board_info->board_info; ++board_info, first = 0) {
+-		struct v4l2_subdev *subdev;
+-		struct i2c_adapter *adapter;
+-
+-		adapter = i2c_get_adapter(board_info->i2c_adapter_id);
+-		if (!adapter) {
+-			dev_err(iss->dev,
+-				"%s: Unable to get I2C adapter %d for device %s\n",
+-				__func__, board_info->i2c_adapter_id,
+-				board_info->board_info->type);
+-			continue;
+-		}
+-
+-		subdev = v4l2_i2c_new_subdev_board(&iss->v4l2_dev, adapter,
+-				board_info->board_info, NULL);
+-		if (!subdev) {
+-			dev_err(iss->dev, "Unable to register subdev %s\n",
+-				board_info->board_info->type);
+-			continue;
+-		}
+-
+-		if (first)
+-			sensor = subdev;
+-	}
+-
+-	return sensor;
+-}
+-
+ static int iss_register_entities(struct iss_device *iss)
+ {
+-	struct iss_platform_data *pdata = iss->pdata;
+-	struct iss_v4l2_subdevs_group *subdevs;
+ 	int ret;
+ 
+ 	iss->media_dev.dev = iss->dev;
+@@ -993,12 +906,7 @@ static int iss_register_entities(struct iss_device *iss)
+ 		sizeof(iss->media_dev.model));
+ 	iss->media_dev.hw_revision = iss->revision;
+ 	iss->media_dev.ops = &iss_media_ops;
+-	ret = media_device_register(&iss->media_dev);
+-	if (ret < 0) {
+-		dev_err(iss->dev, "Media device registration failed (%d)\n",
+-			ret);
+-		return ret;
+-	}
++	media_device_init(&iss->media_dev);
+ 
+ 	iss->v4l2_dev.mdev = &iss->media_dev;
+ 	ret = v4l2_device_register(iss->dev, &iss->v4l2_dev);
+@@ -1029,53 +937,6 @@ static int iss_register_entities(struct iss_device *iss)
+ 	if (ret < 0)
+ 		goto done;
+ 
+-	/* Register external entities */
+-	for (subdevs = pdata->subdevs; subdevs && subdevs->subdevs; ++subdevs) {
+-		struct v4l2_subdev *sensor;
+-		struct media_entity *input;
+-		unsigned int flags;
+-		unsigned int pad;
+-
+-		sensor = iss_register_subdev_group(iss, subdevs->subdevs);
+-		if (!sensor)
+-			continue;
+-
+-		sensor->host_priv = subdevs;
+-
+-		/* Connect the sensor to the correct interface module.
+-		 * CSI2a receiver through CSIPHY1, or
+-		 * CSI2b receiver through CSIPHY2
+-		 */
+-		switch (subdevs->interface) {
+-		case ISS_INTERFACE_CSI2A_PHY1:
+-			input = &iss->csi2a.subdev.entity;
+-			pad = CSI2_PAD_SINK;
+-			flags = MEDIA_LNK_FL_IMMUTABLE
+-			      | MEDIA_LNK_FL_ENABLED;
+-			break;
+-
+-		case ISS_INTERFACE_CSI2B_PHY2:
+-			input = &iss->csi2b.subdev.entity;
+-			pad = CSI2_PAD_SINK;
+-			flags = MEDIA_LNK_FL_IMMUTABLE
+-			      | MEDIA_LNK_FL_ENABLED;
+-			break;
+-
+-		default:
+-			dev_err(iss->dev, "invalid interface type %u\n",
+-				subdevs->interface);
+-			ret = -EINVAL;
+-			goto done;
+-		}
+-
+-		ret = media_create_pad_link(&sensor->entity, 0, input, pad,
+-					    flags);
+-		if (ret < 0)
+-			goto done;
+-	}
+-
+-	ret = v4l2_device_register_subdev_nodes(&iss->v4l2_dev);
+-
+ done:
+ 	if (ret < 0)
+ 		iss_unregister_entities(iss);
+@@ -1200,16 +1061,157 @@ static int iss_initialize_modules(struct iss_device *iss)
+ 	return ret;
+ }
+ 
++static int iss_link_entity(struct iss_device *iss, 
++									struct media_entity *entity, 
++									enum iss_interface_type interface)
++{
++	struct media_entity *input;
++	unsigned int flags;
++	unsigned int pad;
++	unsigned int i;
++
++	switch (interface) {
++		case ISS_INTERFACE_CSI2A_PHY1:
++			input = &iss->csi2a.subdev.entity;
++			pad = CSI2_PAD_SINK;
++			flags = MEDIA_LNK_FL_IMMUTABLE | MEDIA_LNK_FL_ENABLED;
++			break;
++		case ISS_INTERFACE_CSI2B_PHY2:
++			input = &iss->csi2b.subdev.entity;
++			pad = CSI2_PAD_SINK;
++			flags = MEDIA_LNK_FL_IMMUTABLE | MEDIA_LNK_FL_ENABLED;
++			break;
++		default:
++			dev_err(iss->dev, "%s: invalid interface type %u\n", __func__, interface);
++			return -EINVAL;
++	}
++
++	for (i = 0; i < entity->num_pads; i++) {
++		if (entity->pads[i].flags & MEDIA_PAD_FL_SOURCE)
++			break;
++	}
++	if (i == entity->num_pads) {
++		dev_err(iss->dev, "%s: no source pad in external entity\n", __func__);
++		return -EINVAL;
++	}
++
++	return media_create_pad_link(entity, i, input, pad, flags);
++}
++
++static int iss_fwnode_parse(struct device *dev,
++									struct v4l2_fwnode_endpoint *vep,
++									struct v4l2_async_subdev *asd)
++{
++	struct iss_async_subdev *isd =
++			container_of(asd, struct iss_async_subdev, asd);
++	struct iss_bus_cfg *buscfg = &isd->bus;
++	unsigned int i, lanes;
++
++	dev_dbg(dev, "parsing endpoint %pOF, interface %u\n",
++			to_of_node(vep->base.local_fwnode), vep->base.port);
++
++	switch (vep->base.port)
++	{
++		case ISS_INTERFACE_CSI2A_PHY1:
++			buscfg->interface = ISS_INTERFACE_CSI2A_PHY1;
++			lanes = ISS_CSIPHY1_NUM_DATA_LANES;
++			break;
++		case ISS_INTERFACE_CSI2B_PHY2:
++			buscfg->interface = ISS_INTERFACE_CSI2B_PHY2;
++			lanes = ISS_CSIPHY2_NUM_DATA_LANES;
++			break;
++		default:
++			dev_warn(dev, "parsing endpoint: invalid interface %u\n", vep->base.port);
++			return -EINVAL;
++	}
++
++	buscfg->bus.csi2.lanecfg.clk.pos = vep->bus.mipi_csi2.clock_lane;
++	buscfg->bus.csi2.lanecfg.clk.pol =
++								vep->bus.mipi_csi2.lane_polarities[0];
++	dev_info(dev, "clock lane polarity %u, pos %u\n",
++					buscfg->bus.csi2.lanecfg.clk.pol,
++					buscfg->bus.csi2.lanecfg.clk.pos);
++
++	for (i = 0; i < lanes; i++)
++	{
++		buscfg->bus.csi2.lanecfg.data[i].pos =
++						vep->bus.mipi_csi2.data_lanes[i];
++		buscfg->bus.csi2.lanecfg.data[i].pol =
++						vep->bus.mipi_csi2.lane_polarities[i + 1];
++		dev_info(dev, "data lane %u polarity %u, pos %u\n", i,
++								buscfg->bus.csi2.lanecfg.data[i].pol,
++								buscfg->bus.csi2.lanecfg.data[i].pos);
++	}
++
++	/*
++	 * FIXME: now we assume the CRC is always there.
++	 * Implement a way to obtain this information from the
++	 * sensor. Frame descriptors, perhaps?
++	 */
++	buscfg->bus.csi2.crc = 0;
++
++	return 0;
++}
++
++static int iss_subdev_notifier_bound(struct v4l2_async_notifier *async,
++									struct v4l2_subdev *subdev,
++									struct v4l2_async_subdev *asd)
++{
++	struct iss_device *iss = container_of(async, struct iss_device, notifier);
++	struct iss_async_subdev *isd = container_of(asd, struct iss_async_subdev, asd);
++	int ret;
++	
++	ret = iss_link_entity(iss, &subdev->entity, isd->bus.interface);
++	if (ret < 0)
++		return ret;
++
++	isd->sd = subdev;
++	isd->sd->host_priv = &isd->bus;
++	
++	return ret;
++}
++
++static int iss_subdev_notifier_complete(struct v4l2_async_notifier *async)
++{
++	struct iss_device *iss = container_of(async, struct iss_device, notifier);
++
++	int ret;
++	/*
++	struct v4l2_device *v4l2_dev = &iss->v4l2_dev;
++	struct v4l2_subdev *sd;
++
++	ret = media_entity_enum_init(&iss->crashed, &iss->media_dev);
++	if (ret)
++		return ret;
++
++	list_for_each_entry(sd, &v4l2_dev->subdevs, list) {
++		if (sd->notifier != &iss->notifier)
++			continue;
++
++		ret = iss_link_entity(iss, &sd->entity, v4l2_subdev_to_bus_cfg(sd)->interface);
++		if (ret < 0)
++			return ret;
++	}
++	*/
++
++	ret = v4l2_device_register_subdev_nodes(&iss->v4l2_dev);
++	if (ret < 0)
++		return ret;
++
++	return media_device_register(&iss->media_dev);
++}
++
++static const struct v4l2_async_notifier_operations iss_subdev_notifier_ops = {
++	.complete = iss_subdev_notifier_complete,
++	.bound = iss_subdev_notifier_bound,
++};
++
+ static int iss_probe(struct platform_device *pdev)
+ {
+-	struct iss_platform_data *pdata = pdev->dev.platform_data;
+ 	struct iss_device *iss;
+ 	unsigned int i;
+ 	int ret;
+ 
+-	if (!pdata)
+-		return -EINVAL;
+-
+ 	iss = devm_kzalloc(&pdev->dev, sizeof(*iss), GFP_KERNEL);
+ 	if (!iss)
+ 		return -ENOMEM;
+@@ -1217,19 +1219,23 @@ static int iss_probe(struct platform_device *pdev)
+ 	mutex_init(&iss->iss_mutex);
+ 
+ 	iss->dev = &pdev->dev;
+-	iss->pdata = pdata;
+ 
+ 	iss->raw_dmamask = DMA_BIT_MASK(32);
+ 	iss->dev->dma_mask = &iss->raw_dmamask;
+ 	iss->dev->coherent_dma_mask = DMA_BIT_MASK(32);
+ 
+ 	platform_set_drvdata(pdev, iss);
++	dev_set_drvdata(&pdev->dev, iss);
+ 
+-	/*
+-	 * TODO: When implementing DT support switch to syscon regmap lookup by
+-	 * phandle.
+-	 */
+-	iss->syscon = syscon_regmap_lookup_by_compatible("syscon");
++	pm_qos_add_request(&iss->pm_qos, PM_QOS_CPU_DMA_LATENCY, PM_QOS_DEFAULT_VALUE);
++
++	ret = v4l2_async_notifier_parse_fwnode_endpoints(
++				&pdev->dev, &iss->notifier, sizeof(struct iss_async_subdev),
++				iss_fwnode_parse);
++	if (ret < 0)
++		goto error;
++
++	iss->syscon = syscon_regmap_lookup_by_phandle(pdev->dev.of_node,"syscon");
+ 	if (IS_ERR(iss->syscon)) {
+ 		ret = PTR_ERR(iss->syscon);
+ 		goto error;
+@@ -1240,17 +1246,18 @@ static int iss_probe(struct platform_device *pdev)
+ 	if (ret < 0)
+ 		goto error;
+ 
+-	ret = iss_get_clocks(iss);
+-	if (ret < 0)
+-		goto error;
++	pm_runtime_enable(iss->dev);
++	pm_runtime_get_sync(&pdev->dev);
+ 
+ 	if (!omap4iss_get(iss))
+ 		goto error;
+ 
++	/* TODO --- reset should be handled by parent node sysc --- */
+ 	ret = iss_reset(iss);
+ 	if (ret < 0)
+ 		goto error_iss;
+ 
++	/* TODO --- revision should also be handled by parent node sysc --- */
+ 	iss->revision = iss_reg_read(iss, OMAP4_ISS_MEM_TOP, ISS_HL_REVISION);
+ 	dev_info(iss->dev, "Revision %08x found\n", iss->revision);
+ 
+@@ -1310,6 +1317,12 @@ static int iss_probe(struct platform_device *pdev)
+ 	if (ret < 0)
+ 		goto error_entities;
+ 
++	iss->notifier.ops = &iss_subdev_notifier_ops;
++
++	ret = v4l2_async_notifier_register(&iss->v4l2_dev, &iss->notifier);
++	if (ret)
++		goto error_entities;
++
+ 	omap4iss_put(iss);
+ 
+ 	return 0;
+@@ -1321,7 +1334,9 @@ static int iss_probe(struct platform_device *pdev)
+ 	iss_cleanup_modules(iss);
+ error_iss:
+ 	omap4iss_put(iss);
++	pm_qos_remove_request(&iss->pm_qos);
+ error:
++	v4l2_async_notifier_cleanup(&iss->notifier);
+ 	mutex_destroy(&iss->iss_mutex);
+ 
+ 	return ret;
+@@ -1334,6 +1349,7 @@ static int iss_remove(struct platform_device *pdev)
+ 	iss_unregister_entities(iss);
+ 	media_entity_enum_cleanup(&iss->crashed);
+ 	iss_cleanup_modules(iss);
++	pm_qos_remove_request(&iss->pm_qos);
+ 
+ 	return 0;
+ }
+@@ -1344,12 +1360,25 @@ static const struct platform_device_id omap4iss_id_table[] = {
+ };
+ MODULE_DEVICE_TABLE(platform, omap4iss_id_table);
+ 
++static const struct of_device_id omap4iss_of_table[] = {
++	{ .compatible = "ti,omap4iss" },
++	{ },
++};
++MODULE_DEVICE_TABLE(of, omap4iss_of_table);
++
++static const struct dev_pm_ops omap4iss_pm_ops = {
++	.runtime_suspend = omap4iss_runtime_suspend,
++	.runtime_resume = omap4iss_runtime_resume,
++};
++
+ static struct platform_driver iss_driver = {
+ 	.probe		= iss_probe,
+ 	.remove		= iss_remove,
+ 	.id_table	= omap4iss_id_table,
+ 	.driver = {
+ 		.name	= "omap4iss",
++		.pm 	= &omap4iss_pm_ops,
++		.of_match_table = of_match_ptr(omap4iss_of_table),
+ 	},
+ };
+ 
+diff --git a/drivers/staging/media/omap4iss/iss.h b/drivers/staging/media/omap4iss/iss.h
+index 760ee27..00d3315 100644
+--- a/drivers/staging/media/omap4iss/iss.h
++++ b/drivers/staging/media/omap4iss/iss.h
+@@ -16,14 +16,16 @@
+ 
+ #include <media/v4l2-device.h>
+ #include <media/v4l2-mc.h>
++#include <media/v4l2-async.h>
+ 
+ #include <linux/device.h>
+ #include <linux/io.h>
+ #include <linux/platform_device.h>
+ #include <linux/wait.h>
+ 
+-#include <linux/platform_data/media/omap4iss.h>
++#include <linux/pm_qos.h>
+ 
++#include "omap4iss.h"
+ #include "iss_regs.h"
+ #include "iss_csiphy.h"
+ #include "iss_csi2.h"
+@@ -88,6 +90,7 @@ struct iss_reg {
+  */
+ struct iss_device {
+ 	struct v4l2_device v4l2_dev;
++	struct v4l2_async_notifier notifier;
+ 	struct media_device media_dev;
+ 	struct device *dev;
+ 	u32 revision;
+@@ -121,8 +124,23 @@ struct iss_device {
+ 
+ 	unsigned int subclk_resources;
+ 	unsigned int isp_subclk_resources;
++
++#define ISS_MAX_SUBDEVS        2
++	struct v4l2_subdev *subdevs[ISS_MAX_SUBDEVS];
++
++	struct pm_qos_request pm_qos;
++};
++
++struct iss_async_subdev {
++	struct v4l2_async_subdev asd;
++	struct iss_bus_cfg bus;
++
++	struct v4l2_subdev *sd;
+ };
+ 
++#define v4l2_subdev_to_bus_cfg(sd) \
++	(&container_of((sd)->asd, struct iss_async_subdev, asd)->bus)
++
+ #define v4l2_dev_to_iss_device(dev) \
+ 	container_of(dev, struct iss_device, v4l2_dev)
+ 
+diff --git a/drivers/staging/media/omap4iss/iss_csi2.c b/drivers/staging/media/omap4iss/iss_csi2.c
+index f6acc54..d6487d7 100644
+--- a/drivers/staging/media/omap4iss/iss_csi2.c
++++ b/drivers/staging/media/omap4iss/iss_csi2.c
+@@ -1275,6 +1275,7 @@ static int csi2_init_entities(struct iss_csi2_device *csi2, const char *subname)
+ 	pads[CSI2_PAD_SOURCE].flags = MEDIA_PAD_FL_SOURCE;
+ 	pads[CSI2_PAD_SINK].flags = MEDIA_PAD_FL_SINK;
+ 
++	me->function = MEDIA_ENT_F_IO_V4L;
+ 	me->ops = &csi2_media_ops;
+ 	ret = media_entity_pads_init(me, CSI2_PADS_NUM, pads);
+ 	if (ret < 0)
+diff --git a/drivers/staging/media/omap4iss/iss_csiphy.c b/drivers/staging/media/omap4iss/iss_csiphy.c
+index 748607f..a8cf24e 100644
+--- a/drivers/staging/media/omap4iss/iss_csiphy.c
++++ b/drivers/staging/media/omap4iss/iss_csiphy.c
+@@ -121,7 +121,7 @@ int omap4iss_csiphy_config(struct iss_device *iss,
+ {
+ 	struct iss_csi2_device *csi2 = v4l2_get_subdevdata(csi2_subdev);
+ 	struct iss_pipeline *pipe = to_iss_pipeline(&csi2_subdev->entity);
+-	struct iss_v4l2_subdevs_group *subdevs = pipe->external->host_priv;
++	struct iss_bus_cfg *buscfg = pipe->external->host_priv;
+ 	struct iss_csiphy_dphy_cfg csi2phy;
+ 	int csi2_ddrclk_khz;
+ 	struct iss_csiphy_lanes_cfg *lanes;
+@@ -129,7 +129,14 @@ int omap4iss_csiphy_config(struct iss_device *iss,
+ 	u32 cam_rx_ctrl;
+ 	unsigned int i;
+ 
+-	lanes = &subdevs->bus.csi2.lanecfg;
++	if (!buscfg) {
++		struct iss_async_subdev *isd =
++			container_of(pipe->external->asd, 
++					struct iss_async_subdev, asd);
++		buscfg = &isd->bus;
++	}
++
++	lanes = &buscfg->bus.csi2.lanecfg;
+ 
+ 	/*
+ 	 * SCM.CONTROL_CAMERA_RX
+@@ -147,7 +154,7 @@ int omap4iss_csiphy_config(struct iss_device *iss,
+ 	 */
+ 	regmap_read(iss->syscon, 0x68, &cam_rx_ctrl);
+ 
+-	if (subdevs->interface == ISS_INTERFACE_CSI2A_PHY1) {
++	if (buscfg->interface == ISS_INTERFACE_CSI2A_PHY1) {
+ 		cam_rx_ctrl &= ~(OMAP4_CAMERARX_CSI21_LANEENABLE_MASK |
+ 				OMAP4_CAMERARX_CSI21_CAMMODE_MASK);
+ 		/* NOTE: Leave CSIPHY1 config to 0x0: D-PHY mode */
+@@ -158,7 +165,7 @@ int omap4iss_csiphy_config(struct iss_device *iss,
+ 		cam_rx_ctrl |= OMAP4_CAMERARX_CSI21_CTRLCLKEN_MASK;
+ 	}
+ 
+-	if (subdevs->interface == ISS_INTERFACE_CSI2B_PHY2) {
++	if (buscfg->interface == ISS_INTERFACE_CSI2B_PHY2) {
+ 		cam_rx_ctrl &= ~(OMAP4_CAMERARX_CSI22_LANEENABLE_MASK |
+ 				OMAP4_CAMERARX_CSI22_CAMMODE_MASK);
+ 		/* NOTE: Leave CSIPHY2 config to 0x0: D-PHY mode */
+diff --git a/drivers/staging/media/omap4iss/iss_csiphy.h b/drivers/staging/media/omap4iss/iss_csiphy.h
+index a0f2d97..f41b980 100644
+--- a/drivers/staging/media/omap4iss/iss_csiphy.h
++++ b/drivers/staging/media/omap4iss/iss_csiphy.h
+@@ -14,7 +14,7 @@
+ #ifndef OMAP4_ISS_CSI_PHY_H
+ #define OMAP4_ISS_CSI_PHY_H
+ 
+-#include <linux/platform_data/media/omap4iss.h>
++#include "omap4iss.h"
+ 
+ struct iss_csi2_device;
+ 
+diff --git a/drivers/staging/media/omap4iss/iss_ipipe.c b/drivers/staging/media/omap4iss/iss_ipipe.c
+index d86ef8a..39cf657 100644
+--- a/drivers/staging/media/omap4iss/iss_ipipe.c
++++ b/drivers/staging/media/omap4iss/iss_ipipe.c
+@@ -515,6 +515,7 @@ static int ipipe_init_entities(struct iss_ipipe_device *ipipe)
+ 	pads[IPIPE_PAD_SINK].flags = MEDIA_PAD_FL_SINK;
+ 	pads[IPIPE_PAD_SOURCE_VP].flags = MEDIA_PAD_FL_SOURCE;
+ 
++	me->function = MEDIA_ENT_F_VID_IF_BRIDGE;
+ 	me->ops = &ipipe_media_ops;
+ 	ret = media_entity_pads_init(me, IPIPE_PADS_NUM, pads);
+ 	if (ret < 0)
+diff --git a/drivers/staging/media/omap4iss/iss_ipipeif.c b/drivers/staging/media/omap4iss/iss_ipipeif.c
+index cb88b2b..d5b798e 100644
+--- a/drivers/staging/media/omap4iss/iss_ipipeif.c
++++ b/drivers/staging/media/omap4iss/iss_ipipeif.c
+@@ -747,6 +747,7 @@ static int ipipeif_init_entities(struct iss_ipipeif_device *ipipeif)
+ 	pads[IPIPEIF_PAD_SOURCE_ISIF_SF].flags = MEDIA_PAD_FL_SOURCE;
+ 	pads[IPIPEIF_PAD_SOURCE_VP].flags = MEDIA_PAD_FL_SOURCE;
+ 
++	me->function = MEDIA_ENT_F_VID_IF_BRIDGE;
+ 	me->ops = &ipipeif_media_ops;
+ 	ret = media_entity_pads_init(me, IPIPEIF_PADS_NUM, pads);
+ 	if (ret < 0)
+diff --git a/drivers/staging/media/omap4iss/iss_resizer.c b/drivers/staging/media/omap4iss/iss_resizer.c
+index 4bbfa20..afd147b 100644
+--- a/drivers/staging/media/omap4iss/iss_resizer.c
++++ b/drivers/staging/media/omap4iss/iss_resizer.c
+@@ -789,6 +789,7 @@ static int resizer_init_entities(struct iss_resizer_device *resizer)
+ 	pads[RESIZER_PAD_SINK].flags = MEDIA_PAD_FL_SINK;
+ 	pads[RESIZER_PAD_SOURCE_MEM].flags = MEDIA_PAD_FL_SOURCE;
+ 
++	me->function = MEDIA_ENT_F_PROC_VIDEO_SCALER;
+ 	me->ops = &resizer_media_ops;
+ 	ret = media_entity_pads_init(me, RESIZER_PADS_NUM, pads);
+ 	if (ret < 0)
+diff --git a/drivers/staging/media/omap4iss/iss_video.c b/drivers/staging/media/omap4iss/iss_video.c
+index a3a8342..f08d67a 100644
+--- a/drivers/staging/media/omap4iss/iss_video.c
++++ b/drivers/staging/media/omap4iss/iss_video.c
+@@ -893,9 +893,6 @@ iss_video_streamon(struct file *file, void *fh, enum v4l2_buf_type type)
+ 	if (ret)
+ 		goto err_graph_walk_init;
+ 
+-	if (video->iss->pdata->set_constraints)
+-		video->iss->pdata->set_constraints(video->iss, true);
+-
+ 	ret = media_pipeline_start(entity, &pipe->pipe);
+ 	if (ret < 0)
+ 		goto err_media_pipeline_start;
+@@ -987,8 +984,6 @@ iss_video_streamon(struct file *file, void *fh, enum v4l2_buf_type type)
+ err_iss_video_check_format:
+ 	media_pipeline_stop(&video->video.entity);
+ err_media_pipeline_start:
+-	if (video->iss->pdata->set_constraints)
+-		video->iss->pdata->set_constraints(video->iss, false);
+ 	video->queue = NULL;
+ 
+ 	media_graph_walk_cleanup(&graph);
+@@ -1037,8 +1032,6 @@ iss_video_streamoff(struct file *file, void *fh, enum v4l2_buf_type type)
+ 
+ 	media_entity_enum_cleanup(&pipe->ent_enum);
+ 
+-	if (video->iss->pdata->set_constraints)
+-		video->iss->pdata->set_constraints(video->iss, false);
+ 	media_pipeline_stop(&video->video.entity);
+ 
+ done:
+diff --git a/drivers/staging/media/omap4iss/omap4iss.h b/drivers/staging/media/omap4iss/omap4iss.h
+new file mode 100644
+index 0000000..5d85417
+--- /dev/null
++++ b/drivers/staging/media/omap4iss/omap4iss.h
+@@ -0,0 +1,74 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef ARCH_ARM_PLAT_OMAP4_ISS_H
++#define ARCH_ARM_PLAT_OMAP4_ISS_H
++
++#include <linux/i2c.h>
++
++struct iss_device;
++
++enum iss_interface_type {
++	ISS_INTERFACE_CSI2A_PHY1,
++	ISS_INTERFACE_CSI2B_PHY2,
++};
++
++/**
++ * struct iss_csiphy_lane: CSI2 lane position and polarity
++ * @pos: position of the lane
++ * @pol: polarity of the lane
++ */
++struct iss_csiphy_lane {
++	u8 pos;
++	u8 pol;
++};
++
++#define ISS_CSIPHY1_NUM_DATA_LANES	4
++#define ISS_CSIPHY2_NUM_DATA_LANES	1
++
++/**
++ * struct iss_csiphy_lanes_cfg - CSI2 lane configuration
++ * @data: Configuration of one or two data lanes
++ * @clk: Clock lane configuration
++ */
++struct iss_csiphy_lanes_cfg {
++	struct iss_csiphy_lane data[ISS_CSIPHY1_NUM_DATA_LANES];
++	struct iss_csiphy_lane clk;
++};
++
++/**
++ * struct iss_csi2_platform_data - CSI2 interface platform data
++ * @crc: Enable the cyclic redundancy check
++ * @vpclk_div: Video port output clock control
++ */
++struct iss_csi2_platform_data {
++	unsigned crc:1;
++	unsigned vpclk_div:2;
++	struct iss_csiphy_lanes_cfg lanecfg;
++};
++
++struct iss_subdev_i2c_board_info {
++	struct i2c_board_info *board_info;
++	int i2c_adapter_id;
++};
++
++struct iss_v4l2_subdevs_group {
++	struct iss_subdev_i2c_board_info *subdevs;
++	enum iss_interface_type interface;
++	union {
++		struct iss_csi2_platform_data csi2;
++	} bus; /* gcc < 4.6.0 chokes on anonymous union initializers */
++};
++
++struct iss_bus_cfg {
++	enum iss_interface_type interface;
++	union {
++		struct iss_csi2_platform_data csi2;
++	} bus; /* gcc < 4.6.0 chokes on anonymous union initializers */
++};
++
++struct iss_platform_subdev {
++	struct i2c_board_info *board_info;
++	int i2c_adapter_id;
++	struct iss_bus_cfg *bus;
++};
++
++#endif
+diff --git a/include/linux/platform_data/media/omap4iss.h b/include/linux/platform_data/media/omap4iss.h
+deleted file mode 100644
+index 2a511a8..0000000
+--- a/include/linux/platform_data/media/omap4iss.h
++++ /dev/null
+@@ -1,66 +0,0 @@
+-/* SPDX-License-Identifier: GPL-2.0 */
+-#ifndef ARCH_ARM_PLAT_OMAP4_ISS_H
+-#define ARCH_ARM_PLAT_OMAP4_ISS_H
+-
+-#include <linux/i2c.h>
+-
+-struct iss_device;
+-
+-enum iss_interface_type {
+-	ISS_INTERFACE_CSI2A_PHY1,
+-	ISS_INTERFACE_CSI2B_PHY2,
+-};
+-
+-/**
+- * struct iss_csiphy_lane: CSI2 lane position and polarity
+- * @pos: position of the lane
+- * @pol: polarity of the lane
+- */
+-struct iss_csiphy_lane {
+-	u8 pos;
+-	u8 pol;
+-};
+-
+-#define ISS_CSIPHY1_NUM_DATA_LANES	4
+-#define ISS_CSIPHY2_NUM_DATA_LANES	1
+-
+-/**
+- * struct iss_csiphy_lanes_cfg - CSI2 lane configuration
+- * @data: Configuration of one or two data lanes
+- * @clk: Clock lane configuration
+- */
+-struct iss_csiphy_lanes_cfg {
+-	struct iss_csiphy_lane data[ISS_CSIPHY1_NUM_DATA_LANES];
+-	struct iss_csiphy_lane clk;
+-};
+-
+-/**
+- * struct iss_csi2_platform_data - CSI2 interface platform data
+- * @crc: Enable the cyclic redundancy check
+- * @vpclk_div: Video port output clock control
+- */
+-struct iss_csi2_platform_data {
+-	unsigned crc:1;
+-	unsigned vpclk_div:2;
+-	struct iss_csiphy_lanes_cfg lanecfg;
+-};
+-
+-struct iss_subdev_i2c_board_info {
+-	struct i2c_board_info *board_info;
+-	int i2c_adapter_id;
+-};
+-
+-struct iss_v4l2_subdevs_group {
+-	struct iss_subdev_i2c_board_info *subdevs;
+-	enum iss_interface_type interface;
+-	union {
+-		struct iss_csi2_platform_data csi2;
+-	} bus; /* gcc < 4.6.0 chokes on anonymous union initializers */
+-};
+-
+-struct iss_platform_data {
+-	struct iss_v4l2_subdevs_group *subdevs;
+-	void (*set_constraints)(struct iss_device *iss, bool enable);
+-};
+-
+-#endif
+-- 
+2.7.4
+

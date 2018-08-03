@@ -44,6 +44,7 @@ EXTRA_TOOLS_INSTALL = " \
     findutils \
     i2c-tools \
     less \
+    media-ctl \
     nano \
     picocom \
     procps \
@@ -51,6 +52,7 @@ EXTRA_TOOLS_INSTALL = " \
     tcpdump \
     unzip \
     wget \
+    yavta \
     zip \
 "
 

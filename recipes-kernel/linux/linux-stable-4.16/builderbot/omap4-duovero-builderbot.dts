@@ -96,6 +96,35 @@
 			OMAP4_IOPAD(0x11e, PIN_INPUT | MUX_MODE1)		/* uart2_tx.sdmcc3_dat1 */
 		>;
 	};
+
+	iss_csi21_pins: pinmux_iss_csi21_pins {
+		pinctrl-single,pins = <
+			OMAP4_IOPAD(0x0a0, PIN_INPUT_PULLDOWN | MUX_MODE0)	/* csi21_dx0.csi21_dx0 */
+			OMAP4_IOPAD(0x0a2, PIN_INPUT_PULLDOWN | MUX_MODE0)	/* csi21_dy0.csi21_dy0 */
+			OMAP4_IOPAD(0x0a4, PIN_INPUT_PULLDOWN | MUX_MODE0)	/* csi21_dx1.csi21_dx1 */
+			OMAP4_IOPAD(0x0a6, PIN_INPUT_PULLDOWN | MUX_MODE0)	/* csi21_dy1.csi21_dy1 */
+		>;
+	};
+};
+
+&iss {
+	status = "ok";
+	pinctrl-names = "default";
+	pinctrl-0 = <&iss_csi21_pins>;
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			csi_endpoint: endpoint@0 {
+				channel = "0";
+				clock-lanes = <1>;
+				data-lanes = <2>;
+				remote-endpoint = <&ov5640_11>;
+			};
+		};
+	};
 };
 
 &i2c2 {
@@ -205,6 +234,7 @@
 			};
 		};
 	};
+
 	rf_pca_1: pca9545@71 {
 		compatible = "nxp,pca9545";
 		#address-cells = <1>;
@@ -264,6 +294,7 @@
 			};
 		};
 	};
+
 	rf_pca_2: pca9545@72 {
 		compatible = "nxp,pca9545";
 		#address-cells = <1>;
@@ -331,11 +362,70 @@
 
 	clock-frequency = <100000>;
 
-	/* optional 1K EEPROM with revision information */
-	eeprom@51 {
-		compatible = "atmel,24c01";
-		reg = <0x51>;
-		pagesize = <8>;
+	i2c-mux@70 {
+		compatible = "nxp,pca9542";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x70>;
+
+		i2c@0 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0>;
+
+			ov5640_1_gpio: pca9554@38 {
+				compatible = "nxp,pca9554";
+				reg = <0x38>;
+				gpio-controller;
+				#gpio-cells = <2>;
+			};
+
+			ov5640_flash: pca9633@60 {
+				compatible = "nxp,pca9633";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x60>;
+
+				tl@0{
+					label = "ov5640_1_flash_tl";
+					reg = <0>;
+				};
+				tr@1{
+					label = "ov5640_1_flash_tr";
+					reg = <1>;
+				};
+				bl@2{
+					label = "ov5640_1_flash_bl";
+					reg = <2>;
+				};
+				br@3{
+					label = "ov5640_1_flash_br";
+					reg = <3>;
+				};
+			};
+
+			ov5640_1: camera@3c {
+				compatible = "ovti,ov5640";
+				status = "ok";
+				reg = <0x3c>;
+
+				dvdd-enable-gpios = <&ov5640_1_gpio 0 GPIO_ACTIVE_HIGH>; 
+				avdd-enable-gpios = <&ov5640_1_gpio 1 GPIO_ACTIVE_HIGH>;
+				clock-enable-gpios = <&ov5640_1_gpio 4 GPIO_ACTIVE_HIGH>;
+
+				powerdown-gpios = <&ov5640_1_gpio 5 GPIO_ACTIVE_HIGH>;
+				reset-gpios = <&ov5640_1_gpio 6 GPIO_ACTIVE_LOW>;
+
+				port {
+					ov5640_11: endpoint {
+						clock-lanes = <1>;
+						data-lanes = <2>;
+
+						remote-endpoint = <&csi_endpoint>;
+					};
+				};
+			};
+		};
 	};
 };
 
