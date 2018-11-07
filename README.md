@@ -1,4 +1,6 @@
 # The Yocto Layer for the BuilderBot Robot
+This repository is a layer for the Yocto build system. It is based on and updated from the [meta-duovero](https://github.com/jumpnow/meta-duovero) layer by [Scott Ellis](mailto:scott@jumpnowtek.com).
+
 ## Instructions
 1. Clone the yocto project repository and check out version 2.5 into a new branch.
 ```bash
