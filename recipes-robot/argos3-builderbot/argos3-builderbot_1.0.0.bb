@@ -2,7 +2,7 @@ SUMMARY = "BuilderBot plug-in for ARGoS3"
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://git/src/LICENSE;md5=b176b8e2358647d4c584c9a52b6715fd"
 
-DEPENDS = "argos3 libapriltag libiio"
+DEPENDS = "argos3 libapriltag libiio v4l-utils"
 
 inherit cmake
 
@@ -17,4 +17,6 @@ OECMAKE_SOURCEPATH = "${WORKDIR}/git/src"
 EXTRA_OECMAKE += "-DARGOS_BUILD_FOR=hardware -DARGOS_DOCUMENTATION=OFF"
 
 S = "${WORKDIR}"
+
+FILES_${PN} += "${datadir}/argos3/testing/*"
 
