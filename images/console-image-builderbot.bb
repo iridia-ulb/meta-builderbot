@@ -42,6 +42,7 @@ EXTRA_TOOLS_INSTALL = " \
     dosfstools \
     ethtool \
     findutils \
+    gdb \
     i2c-tools \
     less \
     media-ctl \
