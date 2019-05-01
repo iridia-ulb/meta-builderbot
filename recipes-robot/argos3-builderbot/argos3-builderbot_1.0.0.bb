@@ -2,7 +2,7 @@ SUMMARY = "BuilderBot plug-in for ARGoS3"
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://git/src/LICENSE;md5=b176b8e2358647d4c584c9a52b6715fd"
 
-DEPENDS = "argos3 libapriltag libiio v4l-utils"
+DEPENDS = "argos3 apriltag libiio v4l-utils"
 
 inherit cmake
 
