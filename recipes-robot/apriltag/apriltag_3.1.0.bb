@@ -5,9 +5,7 @@ HOMEPAGE = "https://april.eecs.umich.edu/software/apriltag"
 
 inherit cmake
 
-SRC_URI = "git://github.com/AprilRobotics/apriltag;protocol=http"
-
-SRCREV = "b6af709e0616e33b0d07e2a857b383dbb91a67ab"
+SRC_URI = "git://github.com/AprilRobotics/apriltag;tag=3.1.0;protocol=http"
 
 S = "${WORKDIR}/git"
 
