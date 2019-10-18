@@ -9,11 +9,10 @@ DEPENDS = "lua"
 inherit cmake
 
 SRC_URI = "git://github.com/ilpincy/argos3;protocol=http \
-           file://0001-Add-hardware-boilerplate-code-to-ARGoS.patch \
-           file://0002-Add-the-rate-class.patch \
+           file://0001-Workaround-for-hardware.patch \
 "
 
-SRCREV = "402cf2fc1dfa03935518062e7ba342b3b3ac87d6"
+SRCREV = "8a2279d92bc527552650735f499aefd2ea68a9bc"
 
 S = "${WORKDIR}/git"
 

@@ -6,7 +6,8 @@ DEPENDS = "argos3 apriltag libiio v4l-utils"
 
 inherit cmake
 
-SRC_URI = "git://github.com/allsey87/argos3-builderbot.git;protocol=http"
+#SRC_URI = "git://127.0.0.1/home/harry/code/argos3-srocs/.git/;branch=master;protocol=ssh;user=harry"
+SRC_URI = "git://github.com/allsey87/argos3-srocs.git;protocol=http"
 
 SRCREV = "${AUTOREV}"
 
@@ -18,5 +19,6 @@ EXTRA_OECMAKE += "-DARGOS_BUILD_FOR=hardware -DARGOS_DOCUMENTATION=OFF"
 
 S = "${WORKDIR}"
 
-FILES_${PN} += "${datadir}/argos3/testing/*"
+FILES_${PN} += "${libdir}/argos3/*"
+FILES_${PN} += "${datadir}/argos3"
 
