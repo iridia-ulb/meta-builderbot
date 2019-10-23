@@ -7,7 +7,7 @@ IMAGE_LINGUAS = "en-us"
 inherit image
 
 BUILDERBOT_INSTALL = " \
-   argos3-builderbot \
+   argos3-srocs \
 "
 
 CORE_OS = " \
