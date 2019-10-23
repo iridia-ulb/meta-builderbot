@@ -9,16 +9,15 @@ DEPENDS = "lua"
 inherit cmake
 
 SRC_URI = "git://github.com/ilpincy/argos3;protocol=http \
-           file://0001-Workaround-for-hardware.patch \
 "
 
-SRCREV = "8a2279d92bc527552650735f499aefd2ea68a9bc"
+SRCREV = "${AUTOREV}"
 
 S = "${WORKDIR}/git"
 
 OECMAKE_SOURCEPATH = "${S}/src"
 
-EXTRA_OECMAKE += "-DARGOS_BUILD_FOR=hardware -DARGOS_DOCUMENTATION=OFF"
+EXTRA_OECMAKE += "-DARGOS_BUILD_FOR=builderbot -DARGOS_DOCUMENTATION=OFF"
 
 FILES_${PN} += "${prefix}/*"
 
