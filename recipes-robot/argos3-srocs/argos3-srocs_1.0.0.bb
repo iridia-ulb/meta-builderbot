@@ -21,5 +21,5 @@ EXTRA_OECMAKE += "-DCMAKE_BUILD_TYPE=Release -DARGOS_DOCUMENTATION=OFF"
 S = "${WORKDIR}"
 
 FILES_${PN} += "${libdir}/argos3/*"
-FILES_${PN} += "${datadir}/argos3"
+FILES_${PN} += "${datadir}/argos3/*"
 
