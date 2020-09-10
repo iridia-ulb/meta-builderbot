@@ -4,9 +4,7 @@ includedir=${prefix}/include
 
 Name: Lua
 Description: Lua language engine
-Version: 5.2.2
+Version: @VERSION@
 Requires:
-Libs: -L${libdir} -llua
-Libs.private: -lm
+Libs: -L${libdir} -llua -lm -ldl
 Cflags: -I${includedir}
-
