@@ -2,7 +2,8 @@ SUMMARY = "BuilderBot plug-in for ARGoS3"
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://git/src/LICENSE;md5=b176b8e2358647d4c584c9a52b6715fd"
 
-DEPENDS = "argos3 apriltag libiio v4l-utils"
+DEPENDS = "argos3 apriltag libiio v4l-utils lua-native"
+RDEPENDS_${PN} = "argos3 apriltag libiio v4l-utils lua"
 
 inherit cmake
 
@@ -15,7 +16,7 @@ S = "${WORKDIR}/git"
 
 OECMAKE_SOURCEPATH = "${WORKDIR}/git/src"
 
-EXTRA_OECMAKE += "-DARGOS_DOCUMENTATION=OFF"
+EXTRA_OECMAKE += "-DCMAKE_BUILD_TYPE=Release -DARGOS_DOCUMENTATION=OFF"
 
 S = "${WORKDIR}"
 
