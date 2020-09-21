@@ -19,3 +19,4 @@ TEMPLATECONF=meta-builderbot/conf source oe-init-build-env
 ```bash
 bitbake console-image-builderbot
 ```
+5. Refer to the instructions on the [Gumstix website](https://www.gumstix.com/support/getting-started/create-bootable-microsd-card/) for preparing an SD card for the Duovero COM on the BuilderBot robot
