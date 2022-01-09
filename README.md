@@ -2,7 +2,7 @@
 
 ## Description
 This repository contains a layer for the Yocto build system, which generates a complete, bootable Linux OS ready to be run on the BuilderBot. It is based on the [meta-duovero](https://github.com/jumpnow/meta-duovero) layer by [Scott Ellis](mailto:scott@jumpnowtek.com). The system comes preinstalled with:
-- ARGoS3 and a plugin for the builderbot
+- ARGoS3 and a plugin for the BuilderBot
 - Python3
 
 ## Quick start
@@ -62,8 +62,7 @@ TODO
 TODO
 
 ## Wifi configuration
-TODO
-The wireless connection is controlled using the `iwctl` command. This interactive command makes the process of connecting to a wireless network relatively painless. Once you are connected, the wireless network is saved on the BuilderBot under `/var/lib/iwd/SSID.KEY_TYPE`. The network should automatically connect on boot and fetch an IP address using DHCP.
+Configuration for the wireless connection can be made by adding networks to `meta-builderbot/recipes-connectivity/wpa-supplicant/files/wpa_supplicant.conf-sane` before building the image. By default, the robot will connect to the network `MergeableNervousSystem` using PSK authentication (password `uprising`).
 
 
 
