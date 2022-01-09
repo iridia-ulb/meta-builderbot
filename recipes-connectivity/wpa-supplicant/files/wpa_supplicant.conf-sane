@@ -3,8 +3,8 @@ ap_scan=1
 
 network={
     key_mgmt=WPA-PSK
-    ssid="devnet"
-    psk="amadeus0247"
+    ssid="MergeableNervousSystem"
+    psk="uprising"
 }
 
 # open network
