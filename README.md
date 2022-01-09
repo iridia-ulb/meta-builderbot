@@ -47,8 +47,8 @@ sudo docker attach yocto-builderbot
 ```
 
 
-## Building the image
-Regardless of whether you used the Docker method or to manual method, you should now be in a directory called `build`. To build the entire image for the BuilderBot, just run the following command:
+### Start the build
+After following the steps above, you should have a terminal that is attached to the docker container and be inside a directory called `build`. To build the entire image for the BuilderBot, just run the following command:
 ```bash
 bitbake console-image-builderbot
 ```
