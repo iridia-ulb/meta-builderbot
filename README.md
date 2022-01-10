@@ -56,7 +56,7 @@ bitbake console-image-builderbot
 Occasionally, the build can fail due to internet connectivity issues or due to an oversight in the dependency tree. These issues are normally resolved by just re-executing the command above.
 
 ## Copying the image
-TODO
+The instructions for creating a bootable microSD card are available on the [Gumstix website](https://www.gumstix.com/community/support/getting-started/create-bootable-microsd-card/).
 
 ## Booting the image and accessing the console
 TODO
