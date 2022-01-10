@@ -1,23 +1,24 @@
-DESCRIPTION = "ARGoS: a parallel, multi-engine simulator for heterogeneous \
-swarm robotics"
+DESCRIPTION = "ARGoS: a parallel, multi-engine simulator for heterogeneous swarm robotics"
 LICENSE = "MIT"
-LIC_FILES_CHKSUM = "file://${WORKDIR}/git/doc/ARGoS_LICENSE.txt;md5=a1f9fe093c34486e45d07b2d33fb5325"
+LIC_FILES_CHKSUM = "file://${COREBASE}/meta/files/common-licenses/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
 HOMEPAGE = "http://www.argos-sim.info/"
 
 DEPENDS = "lua"
+RDEPENDS_${PN} = "lua"
 
 inherit cmake
 
-SRC_URI = "git://github.com/ilpincy/argos3;protocol=http \
+SRC_URI = " \
+   git://github.com/ilpincy/argos3;protocol=http \
 "
 
-SRCREV = "${AUTOREV}"
+SRCREV = "b19c7539c427b9232d0f87a567ad293b67167dbb"
 
 S = "${WORKDIR}/git"
 
 OECMAKE_SOURCEPATH = "${S}/src"
 
-EXTRA_OECMAKE += "-DCMAKE_BUILD_TYPE=Release -DARGOS_BUILD_FOR=builderbot -DARGOS_DOCUMENTATION=OFF"
+EXTRA_OECMAKE += "-DARGOS_BUILD_FOR=builderbot -DARGOS_DOCUMENTATION=OFF"
 
-FILES_${PN} += "${prefix}/*"
+FILES_${PN}-doc += "${prefix}/doc"
 
