@@ -132,6 +132,220 @@
 	pinctrl-0 = <&i2c2_pins>;
 
 	clock-frequency = <400000>;
+	
+	ledsg1: pca9635@10 {
+		compatible = "nxp,pca9635";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x10>;
+
+		led0r@0 {
+			label = "led0r";
+			reg = <0>;
+		};
+		led0g@1 {
+			label = "led0g";
+			reg = <1>;
+		};
+		led0b@2 {
+			label = "led0b";
+			reg = <2>;
+		};
+		unused@3 {
+			reg = <3>;
+		};
+		
+		led1r@4 {
+			label = "led1r";
+			reg = <4>;
+		};
+		led1g@5 {
+			label = "led1g";
+			reg = <5>;
+		};
+		led1b@6 {
+			label = "led1b";
+			reg = <6>;
+		};
+		unused@7 {
+			reg = <7>;
+		};
+		
+		led2r@8 {
+			label = "led2r";
+			reg = <8>;
+		};
+		led2g@9 {
+			label = "led2g";
+			reg = <9>;
+		};
+		led2b@10 {
+			label = "led2b";
+			reg = <10>;
+		};
+		unused@11 {
+			reg = <11>;
+		};
+		
+		led3r@12 {
+			label = "led3r";
+			reg = <12>;
+		};
+		led3g@13 {
+			label = "led3g";
+			reg = <13>;
+		};
+		led3b@14 {
+			label = "led3b";
+			reg = <14>;
+		};
+		unused@15 {
+			reg = <15>;
+		};
+	};
+	
+	ledsg2: pca9635@11 {
+		compatible = "nxp,pca9635";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x11>;
+
+		led4r@0 {
+			label = "led4r";
+			reg = <0>;
+		};
+		led4g@1 {
+			label = "led4g";
+			reg = <1>;
+		};
+		led4b@2 {
+			label = "led4b";
+			reg = <2>;
+		};
+		unused@3 {
+			reg = <3>;
+		};
+		
+		led5r@4 {
+			label = "led5r";
+			reg = <4>;
+		};
+		led5g@5 {
+			label = "led5g";
+			reg = <5>;
+		};
+		led5b@6 {
+			label = "led5b";
+			reg = <6>;
+		};
+		unused@7 {
+			reg = <7>;
+		};
+		
+		led6r@8 {
+			label = "led6r";
+			reg = <8>;
+		};
+		led6g@9 {
+			label = "led6g";
+			reg = <9>;
+		};
+		led6b@10 {
+			label = "led6b";
+			reg = <10>;
+		};
+		unused@11 {
+			reg = <11>;
+		};
+		
+		led7r@12 {
+			label = "led7r";
+			reg = <12>;
+		};
+		led7g@13 {
+			label = "led7g";
+			reg = <13>;
+		};
+		led7b@14 {
+			label = "led7b";
+			reg = <14>;
+		};
+		unused@15 {
+			reg = <15>;
+		};
+	};
+	
+	ledsg3: pca9635@12 {
+		compatible = "nxp,pca9635";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x12>;
+
+		led8r@0 {
+			label = "led8r";
+			reg = <0>;
+		};
+		led8g@1 {
+			label = "led8g";
+			reg = <1>;
+		};
+		led8b@2 {
+			label = "led8b";
+			reg = <2>;
+		};
+		unused@3 {
+			reg = <3>;
+		};
+		
+		led9r@4 {
+			label = "led9r";
+			reg = <4>;
+		};
+		led9g@5 {
+			label = "led9g";
+			reg = <5>;
+		};
+		led9b@6 {
+			label = "led9b";
+			reg = <6>;
+		};
+		unused@7 {
+			reg = <7>;
+		};
+		
+		led10r@8 {
+			label = "led10r";
+			reg = <8>;
+		};
+		led10g@9 {
+			label = "led10g";
+			reg = <9>;
+		};
+		led10b@10 {
+			label = "led10b";
+			reg = <10>;
+		};
+		unused@11 {
+			reg = <11>;
+		};
+		
+		led11r@12 {
+			label = "led11r";
+			reg = <12>;
+		};
+		led11g@13 {
+			label = "led11g";
+			reg = <13>;
+		};
+		led11b@14 {
+			label = "led11b";
+			reg = <14>;
+		};
+		unused@15 {
+			reg = <15>;
+		};
+	};
+
 
 	uart56: sc16is762@48 {
 		compatible = "nxp,sc16is762";
