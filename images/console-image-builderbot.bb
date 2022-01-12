@@ -33,6 +33,7 @@ KERNEL_EXTRA_INSTALL = " \
 
 WIFI_SUPPORT = " \
     iw \
+    udev-rules-builderbot \
     linux-firmware-sd8787 \
     wireless-tools \
     wpa-supplicant \

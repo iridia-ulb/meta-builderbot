@@ -1,0 +1,2 @@
+SUBSYSTEM=="net", ACTION=="add", KERNEL=="mlan*", NAME="wlan0"
+

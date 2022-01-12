@@ -1,7 +1,8 @@
 auto lo
 iface lo inet loopback
 
-auto mlan0
-iface mlan0 inet dhcp
+auto wlan0
+iface wlan0 inet dhcp
     wireless_mode managed
     wpa-conf /etc/wpa_supplicant.conf
+
