@@ -6,7 +6,7 @@ LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda
 RDEPENDS_${PN} = "python3"
 
 SRC_URI = " \
-   git://github.com/iridia-ulb/fernbedienung-python.git;protocol=http \
+   git://github.com/iridia-ulb/fernbedienung-python.git;protocol=http;branch=builderbot \
    file://fernbedienung.service \
 "
 
