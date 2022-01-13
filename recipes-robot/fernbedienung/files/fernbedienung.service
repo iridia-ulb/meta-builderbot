@@ -1,9 +1,0 @@
-[Unit]
-Description=Fernbedienung
-After=network.target
-
-[Service]
-ExecStart=/usr/bin/python3 /usr/lib/fernbedienung/service.py
-
-[Install]
-WantedBy=multi-user.target

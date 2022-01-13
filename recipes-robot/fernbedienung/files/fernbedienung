@@ -1,0 +1,40 @@
+#! /bin/sh
+set -e
+
+PIDFILE=/var/run/fernbedienung.pid
+SCRIPT=/usr/lib/fernbedienung/service.py
+
+# source function library
+. /etc/init.d/functions
+
+case "$1" in
+  start)
+	echo "Starting Fernbedienung"
+	start-stop-daemon -S -p $PIDFILE -x /usr/bin/python3 -- $SCRIPT
+        echo "done."
+	;;
+  stop)
+        echo -n "Stopping Fernbedienung"
+	start-stop-daemon -K -p $PIDFILE -s 2 -x /usr/bin/python3
+        echo "."
+	;;
+
+  restart)
+        echo -n "Restarting Fernbedienung"
+	start-stop-daemon -K -p $PIDFILE --oknodo -x /usr/bin/python3
+	sleep 1
+	start-stop-daemon -S -p $PIDFILE -x /usr/bin/python3 -- $SCRIPT
+	echo "."
+	;;
+
+  status)
+	status /usr/bin/python3
+	exit $?
+  ;;
+
+  *)
+	echo "Usage: /etc/init.d/fernbedienung {start|stop|status|restart}"
+	exit 1
+esac
+
+exit 0
