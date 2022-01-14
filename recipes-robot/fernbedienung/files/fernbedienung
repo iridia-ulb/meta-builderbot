@@ -3,6 +3,7 @@ set -e
 
 PIDFILE=/var/run/fernbedienung.pid
 SCRIPT=/usr/lib/fernbedienung/service.py
+LOGFILE=/var/log/fernbedienung.log
 
 # source function library
 . /etc/init.d/functions
@@ -10,21 +11,39 @@ SCRIPT=/usr/lib/fernbedienung/service.py
 case "$1" in
   start)
 	echo "Starting Fernbedienung"
-	start-stop-daemon -S -p $PIDFILE -x /usr/bin/python3 -- $SCRIPT
-        echo "done."
+	start-stop-daemon \
+		--quiet \
+		--start \
+		--background \
+		--make-pidfile \
+		--pidfile $PIDFILE \
+		--startas /usr/bin/python3 -- $SCRIPT --log $LOGFILE
 	;;
   stop)
-        echo -n "Stopping Fernbedienung"
-	start-stop-daemon -K -p $PIDFILE -s 2 -x /usr/bin/python3
-        echo "."
+        echo "Stopping Fernbedienung"
+	start-stop-daemon \
+		--quiet \
+		--stop \
+		--pidfile $PIDFILE \
+		--signal SIGINT
 	;;
 
   restart)
-        echo -n "Restarting Fernbedienung"
-	start-stop-daemon -K -p $PIDFILE --oknodo -x /usr/bin/python3
+        echo "Restarting Fernbedienung"
+	start-stop-daemon \
+		--quiet \
+		--stop \
+		--oknodo \
+		--pidfile $PIDFILE \
+		--signal SIGINT
 	sleep 1
-	start-stop-daemon -S -p $PIDFILE -x /usr/bin/python3 -- $SCRIPT
-	echo "."
+	start-stop-daemon \
+		--quiet \
+		--start \
+		--background \
+		--make-pidfile \
+		--pidfile $PIDFILE \
+		--startas /usr/bin/python3 -- $SCRIPT --log $LOGFILE
 	;;
 
   status)
