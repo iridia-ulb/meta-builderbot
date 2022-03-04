@@ -2,6 +2,7 @@
 
 ## Description
 The [meta-builderbot repository](https://github.com/iridia-ulb/meta-builderbot) contains a layer for the Yocto build system, which generates a complete, bootable Linux OS ready to be run on the BuilderBot. This layer is based on the [meta-duovero](https://github.com/jumpnow/meta-duovero) layer by [Scott Ellis](mailto:scott@jumpnowtek.com). The system comes preinstalled with:
+
 - ARGoS3 and a plugin for the BuilderBot
 - Python3
 
@@ -28,7 +29,8 @@ git clone https://github.com/iridia-ulb/meta-builderbot.git
 ### Create the Docker image
 The following command will execute the Dockerfile in the meta-builderbot repository and create a Docker image based on Ubuntu 16.04 LTS. The image will contain a user and a group, which match the identifiers of current user and group. Setting the user and group in this way enables trivial access to the build system from the host.
 ```sh
-sudo docker build -t yocto-builderbot:latest https://github.com/iridia-ulb/meta-builderbot.git#:docker \
+sudo docker build -t yocto-builderbot:latest \
+ https://github.com/iridia-ulb/meta-builderbot.git#:docker \
  --build-arg host_user_id=$(id -u) \
  --build-arg host_group_id=$(id -g)
 ```
@@ -36,8 +38,10 @@ sudo docker build -t yocto-builderbot:latest https://github.com/iridia-ulb/meta-
 Create the Docker container
 Once the above command has completed successfully, you can run the following command to create a container from the image. Note the two paths given after the `-v` option. The format of this argument is `path/on/host:path/in/container` where `path/on/host` is a directory on your host system and `path/in/container` is a directory inside the Docker container. This command will map the home directory inside the container to a directory called `yocto-builderbot` under the current user's home directory on the host.
 ```sh
-sudo docker create --tty --interactive --volume /home/$(id -un)/yocto-builderbot:/home/developer \
- --name yocto-pipuck --hostname yocto-pipuck yocto-pipuck:latest
+sudo docker create --tty --interactive \
+ --volume /home/$(id -un)/yocto-builderbot:/home/developer \
+ --name yocto-pipuck
+ --hostname yocto-pipuck yocto-pipuck:latest
 ```
 After executing this command, you should have a new container with the build environment. The following commands will start and attach to that container.
 
@@ -65,5 +69,5 @@ picocom -b 115200 /dev/ttyUSBX
 Where `ttyUSBX` is the serial-to-USB converter. Check `dmesg` while attaching the cable to confirm that you have the right device. Note that to access the serial port, you will either have to (i) use `sudo`, (ii) switch to the root user, or (iii) add yourself to the `dialout` group (do not forget to restart afterwards).
 
 ## Wifi configuration
-Configuration for the wireless connection can be made by adding networks to `meta-builderbot/recipes-connectivity/wpa-supplicant/files/wpa_supplicant.conf-sane` before building the image. By default, the BuilderBot will connect to the network `MergeableNervousSystem` using PSK authentication with the password `uprising`. The network should automatically connect on boot and fetch an IP address using DHCP.
+Configuration for the wireless connection can be made by adding networks to [`wpa_supplicant.conf-sane`](https://github.com/iridia-ulb/meta-builderbot/blob/master/recipes-connectivity/wpa-supplicant/files/wpa_supplicant.conf-sane) before building the image. By default, the BuilderBot will connect to the network `MergeableNervousSystem` using PSK authentication with the password `uprising`. The network should automatically connect on boot and fetch an IP address using DHCP.
 
