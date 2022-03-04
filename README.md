@@ -40,7 +40,7 @@ Once the above command has completed successfully, you can run the following com
 ```sh
 sudo docker create --tty --interactive \
  --volume /home/$(id -un)/yocto-builderbot:/home/developer \
- --name yocto-pipuck
+ --name yocto-pipuck \
  --hostname yocto-pipuck yocto-pipuck:latest
 ```
 After executing this command, you should have a new container with the build environment. The following commands will start and attach to that container.
