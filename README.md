@@ -9,7 +9,7 @@ The [meta-builderbot repository](https://github.com/iridia-ulb/meta-builderbot) 
 ## Quick start
 To ensure reproducible builds on systems with varying configurations, the following steps will explain how to create an image using [Docker](https://docs.docker.com/get-docker/). Note that you will probably need to use sudo or to switch to a root user to install Docker or to create and run its containers.
 
-To get started, you first need to decide where you want to build the system for the BuilderBot. Keep in mind that while the resulting image will be between 200-300 megabytes in size, the build system itself will require around **50 GB** of free disk space. The following steps will set up the build system. These steps assume that the build location is `/home/$(id -un)/yocto-pipuck` where `$(id -un)` will be replaced with the current username.
+To get started, you first need to decide where you want to build the system for the BuilderBot. Keep in mind that while the resulting image will be between 200-300 megabytes in size, the build system itself will require around **50 GB** of free disk space. The following steps will set up the build system. These steps assume that the build location is `/home/$(id -un)/yocto-builderbot` where `$(id -un)` will be replaced with the current username.
 ```sh
 # Create a directory for the build system
 mkdir /home/`id -un`/yocto-builderbot
@@ -40,8 +40,8 @@ Once the above command has completed successfully, you can run the following com
 ```sh
 sudo docker create --tty --interactive \
  --volume /home/$(id -un)/yocto-builderbot:/home/developer \
- --name yocto-pipuck \
- --hostname yocto-pipuck yocto-pipuck:latest
+ --name yocto-builderbot \
+ --hostname yocto-builderbot yocto-builderbot:latest
 ```
 After executing this command, you should have a new container with the build environment. The following commands will start and attach to that container.
 
